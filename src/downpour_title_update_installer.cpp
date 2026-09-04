@@ -32,6 +32,8 @@
 
 #include <rex/ui/window_win.h>
 #elif defined(__APPLE__)
+#elif defined(__ANDROID__)
+#include "android/downpour_android.h"
 #else
 #include <gtk/gtk.h>
 #endif
@@ -523,6 +525,26 @@ bool DownloadToFile(const std::string& url, const std::filesystem::path& destina
   return ok;
 }
 
+#elif defined(__ANDROID__)
+
+bool DownloadToFile(const std::string& url, const std::filesystem::path& destination,
+                    std::atomic<uint64_t>& copied_bytes, std::atomic<uint64_t>& total_bytes,
+                    std::string& error) {
+  REXLOG_INFO("Downloading Silent Hill: Downpour title update via Android Java bridge");
+  bool success = downpour::android::DownloadFileViaJava(
+      url, destination.string(), nullptr, nullptr, error);
+  if (success) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(destination, ec);
+    if (!ec && size > 0) {
+      total_bytes.store(size, std::memory_order_relaxed);
+      copied_bytes.store(size, std::memory_order_relaxed);
+      return true;
+    }
+  }
+  return success;
+}
+
 #else
 
 bool DownloadToFile(const std::string& url, const std::filesystem::path& destination,
@@ -579,6 +601,11 @@ std::filesystem::path PickTitleUpdateFile() {
     return {};
   }
   return filename;
+}
+#elif defined(__ANDROID__)
+std::filesystem::path PickTitleUpdateFile() {
+  REXLOG_INFO("Requesting Title Update file via Android SAF picker");
+  return downpour::android::ConsumePendingTuPath();
 }
 #else
 std::filesystem::path PickTitleUpdateFile() {
@@ -684,6 +711,9 @@ void RelaunchSelfOrResume(rex::PathConfig runtime_paths,
         "falling back to inline resume callback.",
         GetLastError());
   }
+#elif defined(__ANDROID__)
+  REXLOG_INFO("Restarting Android Activity after install step");
+  downpour::android::RequestRestartApp();
 #endif
   if (complete) {
     complete(std::move(runtime_paths));
@@ -906,6 +936,10 @@ bool RunTitleUpdateInstallWizardBlocking(rex::ui::WindowedAppContext& app_contex
     }
     if (hwnd) {
       RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE);
+    }
+#elif defined(__ANDROID__)
+    if (window) {
+      window->RequestPaint();
     }
 #else
     if (window) {

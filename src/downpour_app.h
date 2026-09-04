@@ -22,6 +22,10 @@
 #include "downpour_iso_installer.h"
 #include "downpour_title_update_installer.h"
 
+#if defined(__ANDROID__)
+#include "android/downpour_android.h"
+#endif
+
 // === DPOUR MIGRATION 2026-07-24: native-render Phase 1b overlay registration ===
 #include <rex/ui/window.h>
 #include <rex/ui/windowed_app_context.h>
@@ -113,6 +117,18 @@ class DownpourApp : public rex::ReXApp {
   // Cvar overrides (`user_data_root`, `cache_path`) in downpour.toml still
   // win; this only changes the *default* when neither cvar is set.
   void OnConfigurePaths(rex::PathConfig& paths) override {
+#if defined(__ANDROID__)
+    auto storage_dir = downpour::android::GetExternalFilesDir();
+    if (storage_dir.empty()) {
+      storage_dir = downpour::android::GetInternalFilesDir();
+    }
+    if (!storage_dir.empty()) {
+      paths.user_data_root = storage_dir / "user";
+      paths.cache_root = storage_dir / "cache";
+      paths.game_data_root = storage_dir / "game";
+      return;
+    }
+#endif
     const auto exe_folder = rex::filesystem::GetExecutableFolder();
     if (exe_folder.empty()) {
       return;  // Defensive: keep SDK defaults if we can't resolve.

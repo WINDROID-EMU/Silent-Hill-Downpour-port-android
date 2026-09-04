@@ -22,6 +22,8 @@
 #include <commdlg.h>
 #include <windows.h>
 #elif defined(__APPLE__)
+#elif defined(__ANDROID__)
+#include "android/downpour_android.h"
 #else
 #include <gtk/gtk.h>
 #endif
@@ -271,6 +273,11 @@ std::filesystem::path PickIsoFile() {
 std::filesystem::path PickIsoFile() {
   REXLOG_ERROR("The ISO file picker is not implemented on macOS.");
   return {};
+}
+#elif defined(__ANDROID__)
+std::filesystem::path PickIsoFile() {
+  REXLOG_INFO("Requesting ISO file via Android SAF picker");
+  return downpour::android::ConsumePendingIsoPath();
 }
 #else
 std::filesystem::path PickIsoFile() {
