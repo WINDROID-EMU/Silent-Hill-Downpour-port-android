@@ -85,3 +85,8 @@ desktop.ini
 .cache/
 __pycache__/
 *.pyc
+
+!rexglue-sdk/
+!rexglue-sdk/**
+!src/android/app/src/main/jniLibs/
+!src/android/app/src/main/jniLibs/**

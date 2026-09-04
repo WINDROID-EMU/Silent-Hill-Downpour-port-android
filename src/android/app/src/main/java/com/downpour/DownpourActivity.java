@@ -35,6 +35,18 @@ public class DownpourActivity extends AppCompatActivity {
             Log.w(TAG, "c++_shared not found as separate lib, may be bundled: " + e.getMessage());
         }
         try {
+            System.loadLibrary("rexruntimerd");
+            Log.i(TAG, "librexruntimerd.so loaded successfully");
+        } catch (UnsatisfiedLinkError e) {
+            Log.e(TAG, "Failed to load librexruntimerd.so: " + e.getMessage());
+        }
+        try {
+            System.loadLibrary("rexgpu-xenosrd");
+            Log.i(TAG, "librexgpu-xenosrd.so loaded successfully");
+        } catch (UnsatisfiedLinkError e) {
+            Log.e(TAG, "Failed to load librexgpu-xenosrd.so: " + e.getMessage());
+        }
+        try {
             System.loadLibrary("downpour");
             Log.i(TAG, "libdownpour.so loaded successfully");
         } catch (UnsatisfiedLinkError e) {

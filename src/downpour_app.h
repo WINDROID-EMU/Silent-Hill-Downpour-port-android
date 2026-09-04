@@ -153,7 +153,7 @@ class DownpourApp : public rex::ReXApp {
   // not the internal SDK identifier. NVIDIA ShadowPlay / OBS / streaming tools
   // also use the window title to label captures, which is why we want it
   // clean and stable rather than version-stamped per build.
-  std::string GetWindowTitle() const override {
+  std::string GetWindowTitle() const {
     return "Silent Hill: Downpour v1.1.8 | \xc2\xabLittle Bit\xc2\xbb";
   }
 

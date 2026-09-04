@@ -16,10 +16,12 @@
 #include <thread>
 #include <vector>
 
-#include <rex/crypto/sha256.h>
+#include "sha256.h"
 #include <rex/cvar.h>
 #include <rex/logging.h>
+#if !defined(__ANDROID__)
 #include <rex/ui/overlay/acquire_wizard_overlay.h>
+#endif
 #include <rex/ui/windowed_app_context.h>
 
 #if defined(_WIN32)
@@ -86,8 +88,8 @@ std::string ToLowerCopy(std::string value) {
 }
 
 std::string Sha256OfData(const uint8_t* data, size_t size) {
-  return rex::crypto::sha256(
-      std::string_view(reinterpret_cast<const char*>(data), size));
+  sha256::SHA256 hasher;
+  return hasher(data, size);
 }
 
 bool ReadWholeFile(const std::filesystem::path& path, std::vector<uint8_t>& out,
@@ -798,6 +800,7 @@ bool StageTitleUpdateFromFile(const std::filesystem::path& source,
 
 void ShowTitleUpdateInstallWizard(rex::ui::ImGuiDrawer* drawer, rex::PathConfig runtime_paths,
                                   std::function<void(rex::PathConfig)> complete) {
+#if !defined(__ANDROID__)
   const auto game_root = runtime_paths.game_data_root;
 
   rex::ui::AcquireWizardDialog::Options options;
@@ -852,17 +855,14 @@ void ShowTitleUpdateInstallWizard(rex::ui::ImGuiDrawer* drawer, rex::PathConfig 
       drawer, std::move(options), std::move(fetch), []() { return PickTitleUpdateFile(); },
       std::move(install),
       [runtime_paths = std::move(runtime_paths), complete = std::move(complete)]() mutable {
-        // After staging TU1 we used to call the SDK's resume callback,
-        // which deferred ConstructRuntime + LaunchModule onto the next UI
-        // tick (rex::ui::WindowedAppContext::CallInUIThreadDeferred).
-        // In practice that path still hung on Win32 — UE3's main loop
-        // never yields back to the swapchain thread cleanly when
-        // LaunchModule is called inline. Simpler and more reliable:
-        // restart the process. The fresh launch sees TU1 already
-        // installed (IsTitleUpdateInstalled == true), skips the wizard,
-        // and boots straight into the game.
         RelaunchSelfOrResume(std::move(runtime_paths), std::move(complete));
       });
+#else
+  (void)drawer;
+  if (complete) {
+    complete(std::move(runtime_paths));
+  }
+#endif
 }
 
 bool RunTitleUpdateInstallWizardBlocking(rex::ui::WindowedAppContext& app_context,

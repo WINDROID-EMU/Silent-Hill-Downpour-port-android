@@ -5,7 +5,7 @@ plugins {
 android {
     namespace 'com.downpour'
     compileSdk 34
-    ndkVersion '26.1.10909125'
+    ndkVersion '28.2.13676358'
 
     defaultConfig {
         applicationId "com.downpour"

@@ -12,7 +12,9 @@
 #include <vector>
 
 #include <rex/logging.h>
+#if !defined(__ANDROID__)
 #include <rex/ui/overlay/acquire_wizard_overlay.h>
+#endif
 
 #include "downpour_title_update_installer.h"
 
@@ -398,6 +400,7 @@ bool InstallGameDataFromIso(const std::filesystem::path& iso_path,
 
 void ShowIsoInstallWizard(rex::ui::ImGuiDrawer* drawer, rex::PathConfig runtime_paths,
                           std::function<void(rex::PathConfig)> complete) {
+#if !defined(__ANDROID__)
   const auto game_root = runtime_paths.game_data_root;
 
   rex::ui::AcquireWizardDialog::Options options;
@@ -448,6 +451,12 @@ void ShowIsoInstallWizard(rex::ui::ImGuiDrawer* drawer, rex::PathConfig runtime_
         // sees the game data (and usually TU1) already installed.
         RelaunchSelfOrResume(std::move(runtime_paths), std::move(complete));
       });
+#else
+  (void)drawer;
+  if (complete) {
+    complete(std::move(runtime_paths));
+  }
+#endif
 }
 
 }  // namespace downpour
