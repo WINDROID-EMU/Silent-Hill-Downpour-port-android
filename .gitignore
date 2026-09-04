@@ -90,3 +90,6 @@ __pycache__/
 !rexglue-sdk/**
 !src/android/app/src/main/jniLibs/
 !src/android/app/src/main/jniLibs/**
+
+!generated/
+!generated/**
