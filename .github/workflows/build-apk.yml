@@ -59,7 +59,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: src/android/app/build/outputs/apk/debug/app-debug.apk
-          name: Silent Hill: Downpour Android Port ${{ github.ref_name }}
+          name: "Silent Hill: Downpour Android Port ${{ github.ref_name }}"
           draft: false
           prerelease: false
         env:
