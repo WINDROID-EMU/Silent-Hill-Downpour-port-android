@@ -36,6 +36,7 @@ bool DownloadFileViaJava(const std::string& url, const std::string& destination,
 
 // Driver configuration from Android Java layer
 void SetDriverConfig(const std::string& driver_dir, const std::string& driver_name,
-                     const std::string& hook_lib_dir, bool use_turnip, bool enable_turbo);
+                     const std::string& hook_lib_dir, bool use_turnip, bool enable_turbo,
+                     bool disable_debug = true);
 
 }  // namespace downpour::android

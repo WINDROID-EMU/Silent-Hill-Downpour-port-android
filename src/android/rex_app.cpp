@@ -501,7 +501,12 @@ bool ReXApp::SetupEnvironment() {
   auto category_levels = rex::ParseCategoryLevelsFromConfig(config_path_);
   auto log_config = rex::BuildLogConfig(log_file_cvar.empty() ? nullptr : log_file_cvar.c_str(),
                                         log_level_str, category_levels);
-  if (log_file_cvar.empty()) {
+  if (log_level_str == "off") {
+    log_config.default_level = spdlog::level::off;
+    log_config.log_file = nullptr;
+    log_config.log_dir.clear();
+    log_config.app_name.clear();
+  } else if (log_file_cvar.empty()) {
     log_config.app_name = std::string(GetName());
 #if defined(__ANDROID__)
     auto logs_dir = user_data_root_.empty()
@@ -528,8 +533,12 @@ bool ReXApp::SetupEnvironment() {
   }
   rex::RegisterLogLevelCallback();
 
-  log_sink_ = std::make_shared<rex::LogCaptureSink>();
-  rex::AddSink(log_sink_);
+  if (log_level_str == "off") {
+    rex::SetAllLevels(spdlog::level::off);
+  } else {
+    log_sink_ = std::make_shared<rex::LogCaptureSink>();
+    rex::AddSink(log_sink_);
+  }
 
   OnPostInitLogging();
 

@@ -255,6 +255,11 @@ bool InitializeDriver() {
     adrenotools_set_turbo(true);
   }
 
+  // Turnip driver environment settings:
+  // - TU_DEBUG=sysmem: allow fallback when GMEM tile size overflows on A6xx
+  // - Avoid unsafe noconform/half precision overrides that cause GPU faults on Adreno 650
+  setenv("MESA_VK_WSI_PRESENT_MODE", "mailbox", 0);
+
   return true;
 }
 
@@ -279,6 +284,9 @@ void ShutdownDriver() {
 }
 
 void LogTextureCompressionSupport() {
+  if (g_driver_config.disable_debug) {
+    return;
+  }
   // Diagnostic only: creates a throwaway VkInstance against whichever driver is
   // currently active (Turnip or system) and logs whether the GPU/driver reports
   // support for BC (DXT), ETC2 and ASTC texture compression.

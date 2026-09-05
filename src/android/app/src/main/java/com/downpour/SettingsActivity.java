@@ -32,8 +32,10 @@ public class SettingsActivity extends AppCompatActivity {
     private Spinner spinnerVulkanPresentMode;
     private Spinner spinnerPresentEffect;
     private SwitchCompat switchAsyncShaders;
+    private SwitchCompat switchDisableDebug;
     private Spinner spinnerShaderThreads;
     private Spinner spinnerTextureCache;
+    private SwitchCompat switchAllowInvalidFetchConstants;
     private TextView tvShaderCacheSize;
     private Button btnClearShaderCache;
     private Button btnApplyQuickSettings;
@@ -86,8 +88,10 @@ public class SettingsActivity extends AppCompatActivity {
         spinnerVulkanPresentMode = findViewById(R.id.spinner_vulkan_present_mode);
         spinnerPresentEffect = findViewById(R.id.spinner_present_effect);
         switchAsyncShaders = findViewById(R.id.switch_async_shaders);
+        switchDisableDebug = findViewById(R.id.switch_disable_debug);
         spinnerShaderThreads = findViewById(R.id.spinner_shader_threads);
         spinnerTextureCache = findViewById(R.id.spinner_texture_cache);
+        switchAllowInvalidFetchConstants = findViewById(R.id.switch_allow_invalid_fetch_constants);
         tvShaderCacheSize = findViewById(R.id.tv_shader_cache_size);
         btnClearShaderCache = findViewById(R.id.btn_clear_shader_cache);
         btnApplyQuickSettings = findViewById(R.id.btn_apply_quick_settings);
@@ -285,10 +289,26 @@ public class SettingsActivity extends AppCompatActivity {
         else spinnerShaderThreads.setSelection(0); // 4 threads
 
         // Texture Cache Limits
-        String softLimit = GameConfigManager.getTomlValue(toml, "texture_cache_memory_limit_soft", "256");
-        if ("192".equals(softLimit)) spinnerTextureCache.setSelection(1);
-        else if ("384".equals(softLimit)) spinnerTextureCache.setSelection(2);
-        else spinnerTextureCache.setSelection(0); // 256/384 MB
+        String softLimit = GameConfigManager.getTomlValue(toml, "texture_cache_memory_limit_soft", "512");
+        if ("192".equals(softLimit)) spinnerTextureCache.setSelection(2);
+        else if ("256".equals(softLimit)) spinnerTextureCache.setSelection(1);
+        else if ("384".equals(softLimit)) spinnerTextureCache.setSelection(3);
+        else if ("768".equals(softLimit)) spinnerTextureCache.setSelection(4);
+        else spinnerTextureCache.setSelection(0); // 512 MB (Recomendado Downpour)
+
+        // Anti-White Texture (UE3 mipmap / invalid fetch constants)
+        boolean allowInvalid = Boolean.parseBoolean(GameConfigManager.getTomlValue(toml, "gpu_allow_invalid_fetch_constants", "true"));
+        if (switchAllowInvalidFetchConstants != null) {
+            switchAllowInvalidFetchConstants.setChecked(allowInvalid);
+        }
+
+        // Disable Debug & Logs
+        String logLevel = GameConfigManager.getTomlValue(toml, "log_level", "off").replace("'", "").replace("\"", "").trim().toLowerCase();
+        boolean disableDebugPref = GameConfigManager.isDisableDebug(this);
+        boolean isDebugDisabled = "off".equals(logLevel) || disableDebugPref;
+        if (switchDisableDebug != null) {
+            switchDisableDebug.setChecked(isDebugDisabled);
+        }
     }
 
     private void setupTomlSection() {
@@ -329,12 +349,22 @@ public class SettingsActivity extends AppCompatActivity {
         spinnerShaderThreads.setAdapter(threadAdapter);
 
         String[] cacheOptions = new String[] {
+            "Otimizado Downpour (512 MB soft / 768 MB hard - Recomendado)",
             "Padrão Móvel (256 MB soft / 384 MB hard)",
             "Econômico (192 MB soft / 256 MB hard - 4GB RAM)",
-            "Alto Desempenho (384 MB soft / 512 MB hard - 8GB+ RAM)"
+            "Alto Desempenho (384 MB soft / 512 MB hard)",
+            "Ultra / Sem Limite (768 MB soft / 1024 MB hard - 8GB+ RAM)"
         };
         ArrayAdapter<String> cacheAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, cacheOptions);
         spinnerTextureCache.setAdapter(cacheAdapter);
+
+        if (switchDisableDebug != null) {
+            switchDisableDebug.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                GameConfigManager.setDisableDebug(this, isChecked);
+                String msg = isChecked ? "Debug e logs desativados (máximo desempenho)!" : "Debug e logs ativados.";
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            });
+        }
 
         // Load TOML Content into EditText
         String currentToml = GameConfigManager.loadTomlContent(this);
@@ -481,15 +511,59 @@ public class SettingsActivity extends AppCompatActivity {
 
             // Texture Cache Limits
             int cachePos = spinnerTextureCache.getSelectedItemPosition();
-            if (cachePos == 1) { // Eco
-                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "192");
-                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "256");
-            } else if (cachePos == 2) { // High
-                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "384");
-                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "512");
-            } else { // Default mobile
+            if (cachePos == 1) { // 256 / 384 MB
                 toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "256");
                 toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "384");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_render_to_texture", "64");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft_lifetime", "30");
+            } else if (cachePos == 2) { // 192 / 256 MB (Eco)
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "192");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "256");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_render_to_texture", "48");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft_lifetime", "30");
+            } else if (cachePos == 3) { // 384 / 512 MB (High)
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "384");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "512");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_render_to_texture", "64");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft_lifetime", "45");
+            } else if (cachePos == 4) { // 768 / 1024 MB (Ultra)
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "768");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "1024");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_render_to_texture", "128");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft_lifetime", "90");
+            } else { // 512 / 768 MB (Recomendado Downpour)
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "512");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "768");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_render_to_texture", "96");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft_lifetime", "60");
+            }
+
+            // Anti-White Textures (gpu_allow_invalid_fetch_constants)
+            if (switchAllowInvalidFetchConstants != null) {
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "gpu_allow_invalid_fetch_constants",
+                        switchAllowInvalidFetchConstants.isChecked() ? "true" : "false");
+            }
+
+            // Disable Debug & Logs
+            if (switchDisableDebug != null) {
+                boolean disabled = switchDisableDebug.isChecked();
+                GameConfigManager.setDisableDebug(this, disabled);
+                if (disabled) {
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_level", "'off'");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_file", "''");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_verbose", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_noisy", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_validation_enabled", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_log_debug_messages", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "gpu_debug_markers", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_high_frequency_kernel_calls", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "kernel_debug_monitor", "false");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "kernel_cert_monitor", "false");
+                } else {
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_level", "'info'");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "log_file", "'logs/downpour.log'");
+                    toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_log_debug_messages", "true");
+                }
             }
 
             etTomlContent.setText(toml);

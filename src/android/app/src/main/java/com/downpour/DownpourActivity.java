@@ -52,7 +52,7 @@ public class DownpourActivity extends SDLActivity {
 
     // Native callbacks for Android bridge
     private native void nativeInit(String internalDir, String externalDir);
-    private native void nativeSetDriverConfig(String driverDir, String driverName, String hookLibDir, boolean useTurnip, boolean enableTurbo);
+    private native void nativeSetDriverConfig(String driverDir, String driverName, String hookLibDir, boolean useTurnip, boolean enableTurbo, boolean disableDebug);
     private static native void nativeOnIsoPicked(String path);
     private static native void nativeOnTuFilePicked(String path);
 
@@ -206,15 +206,17 @@ public class DownpourActivity extends SDLActivity {
             }
         }
 
+        boolean disableDebug = GameConfigManager.isDisableDebug(this);
+
         boolean hasCustomDriver = driverFile.exists();
         if (useTurnip && hasCustomDriver) {
-            Log.i(TAG, "Configuring AdrenoTools Turnip driver: dir=" + customDriverDir.getAbsolutePath() + ", name=" + driverName);
+            Log.i(TAG, "Configuring AdrenoTools Turnip driver: dir=" + customDriverDir.getAbsolutePath() + ", name=" + driverName + ", disableDebug=" + disableDebug);
             GameConfigManager.markTurnipLaunchInProgress(this, true);
-            nativeSetDriverConfig(customDriverDir.getAbsolutePath(), driverName, hookLibDir, true, turbo);
+            nativeSetDriverConfig(customDriverDir.getAbsolutePath(), driverName, hookLibDir, true, turbo, disableDebug);
         } else {
-            Log.i(TAG, "Configuring System Vulkan driver (Turnip active=" + (useTurnip && hasCustomDriver) + ")");
+            Log.i(TAG, "Configuring System Vulkan driver (Turnip active=" + (useTurnip && hasCustomDriver) + ", disableDebug=" + disableDebug + ")");
             GameConfigManager.markTurnipLaunchInProgress(this, false);
-            nativeSetDriverConfig("", "", hookLibDir, false, false);
+            nativeSetDriverConfig("", "", hookLibDir, false, false, disableDebug);
         }
     }
 

@@ -24,6 +24,7 @@
 
 #if defined(__ANDROID__)
 #include "android/downpour_android.h"
+#include "android/downpour_driver.h"
 #endif
 
 // === DPOUR MIGRATION 2026-07-24: native-render Phase 1b overlay registration ===
@@ -132,8 +133,11 @@ class DownpourApp : public rex::ReXApp {
       std::filesystem::create_directories(paths.user_data_root, ec);
       std::filesystem::create_directories(paths.cache_root, ec);
       std::filesystem::create_directories(paths.game_data_root, ec);
-      std::filesystem::create_directories(logs_dir, ec);
-      rex::cvar::SetFlagByName("log_file", (logs_dir / "downpour.log").string());
+      if (!downpour::driver::GetDriverConfig().disable_debug && REXCVAR_GET(log_level) != "off") {
+        rex::cvar::SetFlagByName("log_file", (logs_dir / "downpour.log").string());
+      } else {
+        rex::cvar::SetFlagByName("log_file", "");
+      }
       return;
     }
 #endif

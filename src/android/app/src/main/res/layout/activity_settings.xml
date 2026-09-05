@@ -56,7 +56,7 @@
     <!-- Scrollable Content with 2-Columns Landscape Layout -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="match_parent"
         android:layout_weight="1"
         android:fillViewport="true"
         android:padding="20dp">
@@ -64,29 +64,29 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:baselineAligned="false">
+            android:baselineAligned="false"
+            android:orientation="horizontal">
 
             <!-- Left Column: AdrenoTools Turnip Driver Manager -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:layout_marginEnd="12dp"
+                android:layout_weight="1"
                 android:orientation="vertical">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="8dp"
+                    android:letterSpacing="0.08"
                     android:text="DRIVER GRÁFICO GPU (ADRENOTOOLS)"
                     android:textColor="#58A6FF"
                     android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.08" />
+                    android:textStyle="bold" />
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_card_dark"
                     android:orientation="vertical">
@@ -192,11 +192,11 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:layout_marginBottom="8dp"
+                    android:letterSpacing="0.08"
                     android:text="CONTROLE VIRTUAL NA TELA"
                     android:textColor="#58A6FF"
                     android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.08" />
+                    android:textStyle="bold" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -250,17 +250,42 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:layout_marginBottom="8dp"
+                    android:letterSpacing="0.08"
                     android:text="AJUSTES RÁPIDOS DE DESEMPENHO"
                     android:textColor="#58A6FF"
                     android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.08" />
+                    android:textStyle="bold" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_card_dark"
                     android:orientation="vertical">
+
+                    <!-- Switch: Desativar Todo Debug e Logs -->
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_disable_debug"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Desativar Todo Debug e Logs (Sem Travamentos)"
+                        android:textColor="#F0F6FC"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="12dp"
+                        android:text="Desliga completamente a gravação de logs em disco (downpour.log), camadas de validação Vulkan e rastreadores de debug. Elimina congelamentos e micro-travamentos no aparelho."
+                        android:textColor="#8B949E"
+                        android:textSize="11sp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginBottom="12dp"
+                        android:background="#21262D" />
 
                     <!-- Internal Resolution (Guest Render Target) -->
                     <LinearLayout
@@ -438,6 +463,33 @@
                             android:layout_height="wrap_content" />
                     </LinearLayout>
 
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Limites de memória para o cache de texturas. Valores de 512 MB ou mais impedem a destruição prematura de texturas e eliminam texturas brancas no Downpour."
+                        android:textColor="#8B949E"
+                        android:textSize="11sp" />
+
+                    <!-- Anti-White Texture (gpu_allow_invalid_fetch_constants) -->
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_allow_invalid_fetch_constants"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="Prevenção de Texturas Brancas (UE3)"
+                        android:textColor="#F0F6FC"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Permite constantes transitórias de textura usadas pelo streaming da Unreal Engine 3, impedindo que texturas fiquem brancas durante a transição de mipmaps."
+                        android:textColor="#8B949E"
+                        android:textSize="11sp" />
+
                     <Button
                         android:id="@+id/btn_apply_quick_settings"
                         android:layout_width="match_parent"
@@ -457,11 +509,11 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:layout_marginBottom="8dp"
+                    android:letterSpacing="0.08"
                     android:text="GERENCIAMENTO DE SHADER CACHE"
                     android:textColor="#58A6FF"
                     android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.08" />
+                    android:textStyle="bold" />
 
                 <LinearLayout
                     android:layout_width="match_parent"

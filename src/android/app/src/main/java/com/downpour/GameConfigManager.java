@@ -29,6 +29,7 @@ public class GameConfigManager {
     public static final String PREF_USE_TURNIP = "use_turnip";
     public static final String PREF_DRIVER_NAME = "driver_name";
     public static final String PREF_TURBO = "turbo_mode";
+    public static final String PREF_DISABLE_DEBUG = "disable_debug";
 
     public static final String DEFAULT_DRIVER_NAME = "vulkan.adreno.so";
     public static final String EXTRA_ISO_PATH = "EXTRA_ISO_PATH";
@@ -179,6 +180,18 @@ public class GameConfigManager {
                .apply();
     }
 
+    public static boolean isDisableDebug(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getBoolean(PREF_DISABLE_DEBUG, true);
+    }
+
+    public static void setDisableDebug(Context context, boolean disabled) {
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+               .edit()
+               .putBoolean(PREF_DISABLE_DEBUG, disabled)
+               .apply();
+    }
+
     public static String getDriverName(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         return prefs.getString(PREF_DRIVER_NAME, DEFAULT_DRIVER_NAME);
@@ -307,23 +320,39 @@ public class GameConfigManager {
                "vulkan_async_skip_incomplete_frames = true\n" +
                "readback_resolve = 'none'\n" +
                "vulkan_readback_resolve = false\n" +
-               "gamma_render_target_as_unorm16 = true\n" +
+               "readback_memexport = true\n" +
+               "readback_memexport_fast = true\n" +
+               "gamma_render_target_as_unorm16 = false\n" +
                "gpu_allow_invalid_fetch_constants = true\n" +
-               "snorm16_render_target_full_range = true\n" +
-               "vulkan_force_convert_quad_lists_to_triangle_lists = true\n" +
-               "vulkan_force_expand_rectangle_lists_in_vs = true\n" +
-               "vulkan_force_expand_point_sprites_in_vs = true\n" +
+               "snorm16_render_target_full_range = false\n" +
+               "vulkan_force_convert_quad_lists_to_triangle_lists = false\n" +
+               "vulkan_force_expand_rectangle_lists_in_vs = false\n" +
+               "vulkan_force_expand_point_sprites_in_vs = false\n" +
                "execute_unclipped_draw_vs_on_cpu = false\n" +
                "direct_host_resolve = false\n" +
                "vulkan_dynamic_rendering = false\n" +
+               "vulkan_submit_on_primary_buffer_end = true\n" +
                "async_shader_compilation = true\n" +
                "vulkan_pipeline_creation_threads = 4\n" +
                "store_shaders = true\n" +
                "vulkan_allow_present_mode_immediate = false\n" +
                "vulkan_allow_present_mode_mailbox = false\n" +
                "vulkan_allow_present_mode_fifo_relaxed = false\n" +
-               "texture_cache_memory_limit_soft = 256\n" +
-               "texture_cache_memory_limit_hard = 384\n";
+               "texture_cache_memory_limit_soft = 512\n" +
+               "texture_cache_memory_limit_hard = 768\n" +
+               "texture_cache_memory_limit_render_to_texture = 96\n" +
+               "texture_cache_memory_limit_soft_lifetime = 60\n\n" +
+               "# ===== Debug & Logs (Desempenho Sem Travamentos) =====\n" +
+               "log_level = 'off'\n" +
+               "log_file = ''\n" +
+               "log_verbose = false\n" +
+               "log_noisy = false\n" +
+               "vulkan_validation_enabled = false\n" +
+               "vulkan_log_debug_messages = false\n" +
+               "gpu_debug_markers = false\n" +
+               "log_high_frequency_kernel_calls = false\n" +
+               "kernel_debug_monitor = false\n" +
+               "kernel_cert_monitor = false\n";
     }
 
     public static String updateOrAddTomlKey(String toml, String key, String value) {

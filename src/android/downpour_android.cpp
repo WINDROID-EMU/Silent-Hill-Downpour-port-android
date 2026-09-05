@@ -253,13 +253,15 @@ bool DownloadFileViaJava(const std::string& url, const std::string& destination,
 }
 
 void SetDriverConfig(const std::string& driver_dir, const std::string& driver_name,
-                     const std::string& hook_lib_dir, bool use_turnip, bool enable_turbo) {
+                     const std::string& hook_lib_dir, bool use_turnip, bool enable_turbo,
+                     bool disable_debug) {
   downpour::driver::DriverConfig cfg;
   cfg.driver_dir = driver_dir;
   cfg.driver_name = driver_name;
   cfg.hook_lib_dir = hook_lib_dir;
   cfg.use_turnip = use_turnip;
   cfg.enable_turbo = enable_turbo;
+  cfg.disable_debug = disable_debug;
   downpour::driver::SetDriverConfig(cfg);
 }
 
@@ -279,7 +281,7 @@ JNIEXPORT void JNICALL
 Java_com_downpour_DownpourActivity_nativeSetDriverConfig(
     JNIEnv* env, jobject /*thiz*/,
     jstring driverDir, jstring driverName, jstring hookLibDir,
-    jboolean useTurnip, jboolean enableTurbo) {
+    jboolean useTurnip, jboolean enableTurbo, jboolean disableDebug) {
   std::string dir_str;
   std::string name_str;
   std::string hook_str;
@@ -306,7 +308,7 @@ Java_com_downpour_DownpourActivity_nativeSetDriverConfig(
     }
   }
 
-  downpour::android::SetDriverConfig(dir_str, name_str, hook_str, useTurnip, enableTurbo);
+  downpour::android::SetDriverConfig(dir_str, name_str, hook_str, useTurnip, enableTurbo, disableDebug);
 }
 
 JNIEXPORT void JNICALL
@@ -373,6 +375,7 @@ bool DownloadFileViaJava(const std::string&, const std::string&,
   error = "Not on Android";
   return false;
 }
+void SetDriverConfig(const std::string&, const std::string&, const std::string&, bool, bool, bool) {}
 }
 
 #endif

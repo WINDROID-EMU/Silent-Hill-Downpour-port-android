@@ -13,10 +13,19 @@ echo " ANDROID_HOME:     $ANDROID_HOME"
 echo " ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
 echo "=========================================================="
 
+BUILD_TYPE="${1:-assembleRelease}"
+if [ "$1" = "assembleDebug" ] || [ "$1" = "assembleRelease" ]; then
+    shift
+fi
+
 chmod +x gradlew
-./gradlew assembleDebug "$@"
+./gradlew "$BUILD_TYPE" "$@"
 
 echo "=========================================================="
 echo " Build finished successfully!"
-echo " APK location: app/build/outputs/apk/debug/app-debug.apk"
+if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+    echo " APK location: app/build/outputs/apk/release/app-release.apk"
+elif [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+    echo " APK location: app/build/outputs/apk/debug/app-debug.apk"
+fi
 echo "=========================================================="

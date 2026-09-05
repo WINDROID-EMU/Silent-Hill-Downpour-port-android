@@ -10,6 +10,7 @@ struct DriverConfig {
   std::string driver_name;     // Soname of the driver (e.g. vulkan.adreno.so)
   std::string hook_lib_dir;    // Path to app's nativeLibraryDir containing libmain_hook.so
   bool enable_turbo = true;    // Force maximum Adreno GPU clocks
+  bool disable_debug = true;   // Disable all debug logging, Vulkan validation and disk I/O flush
 };
 
 // Sets driver configuration (called via JNI from DownpourActivity)

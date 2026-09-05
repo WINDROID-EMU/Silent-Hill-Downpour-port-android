@@ -27,7 +27,7 @@ add_compile_definitions(
     __ANDROID__
     SPDLOG_COMPILED_LIB
     SPDLOG_FMT_EXTERNAL
-    REXGLUE_BUILD_CONFIG="Debug"
+    REXGLUE_BUILD_CONFIG="Release"
 )
 
 find_package(rexglue 0.10.0 REQUIRED CONFIG)
