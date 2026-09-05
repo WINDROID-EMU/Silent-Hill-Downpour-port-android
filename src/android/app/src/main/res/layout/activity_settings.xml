@@ -262,7 +262,7 @@
                     android:background="@drawable/bg_card_dark"
                     android:orientation="vertical">
 
-                    <!-- Resolution Scale -->
+                    <!-- Internal Resolution (Guest Render Target) -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -273,7 +273,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Escala de Resolução:"
+                            android:text="Resolução Interna (Render UE3):"
                             android:textColor="#F0F6FC"
                             android:textSize="13sp"
                             android:textStyle="bold" />
@@ -283,6 +283,15 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content" />
                     </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="6dp"
+                        android:text="Reduz a resolução dos alvos de renderização internos da Unreal Engine 3 (GBuffers/Shaders) para máximo FPS. A imagem é escalonada em tela cheia via FSR3 sem encolher a janela."
+                        android:textColor="#8B949E"
+                        android:textSize="11sp" />
 
                     <!-- FPS Limit -->
                     <LinearLayout
@@ -318,6 +327,29 @@
                         android:textSize="13sp"
                         android:textStyle="bold" />
 
+                    <!-- Vulkan Present Mode -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Modo Vulkan (Present Mode):"
+                            android:textColor="#F0F6FC"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <Spinner
+                            android:id="@+id/spinner_vulkan_present_mode"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
                     <!-- Present Effect / Upscaler -->
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -341,6 +373,71 @@
                             android:layout_height="wrap_content" />
                     </LinearLayout>
 
+                    <!-- Async Shader Compilation -->
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_async_shaders"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="Compilação Assíncrona de Shaders"
+                        android:textColor="#F0F6FC"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Compila shaders em segundo plano para evitar micro-travamentos (stutters) durante o jogo."
+                        android:textColor="#8B949E"
+                        android:textSize="11sp" />
+
+                    <!-- Pipeline Threads -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Threads Compilação Pipeline:"
+                            android:textColor="#F0F6FC"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <Spinner
+                            android:id="@+id/spinner_shader_threads"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <!-- Texture Cache Memory Limits -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Cache de Texturas (VRAM/RAM):"
+                            android:textColor="#F0F6FC"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <Spinner
+                            android:id="@+id/spinner_texture_cache"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
                     <Button
                         android:id="@+id/btn_apply_quick_settings"
                         android:layout_width="match_parent"
@@ -350,6 +447,70 @@
                         android:text="Aplicar Ajustes ao downpour.toml"
                         android:textAllCaps="false"
                         android:textColor="#58A6FF"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Shader Cache Management -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="GERENCIAMENTO DE SHADER CACHE"
+                    android:textColor="#58A6FF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card_dark"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Cache Armazenado em Disco:"
+                            android:textColor="#F0F6FC"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_shader_cache_size"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0.00 MB"
+                            android:textColor="#3FB950"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="12dp"
+                        android:text="Armazena os shaders SPIR-V e pipelines pré-compilados. Se você trocar de driver Turnip ou observar glitches visuais, limpe o cache."
+                        android:textColor="#8B949E"
+                        android:textSize="11sp" />
+
+                    <Button
+                        android:id="@+id/btn_clear_shader_cache"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:background="@drawable/btn_danger"
+                        android:text="Limpar Cache de Shaders e Pipelines"
+                        android:textAllCaps="false"
+                        android:textColor="#F85149"
                         android:textSize="13sp"
                         android:textStyle="bold" />
                 </LinearLayout>

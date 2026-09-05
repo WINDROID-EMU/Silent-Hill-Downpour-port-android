@@ -45,6 +45,65 @@ public class GameConfigManager {
         return new File(getStorageDir(context), "game");
     }
 
+    public static File getCacheDir(Context context) {
+        return new File(getStorageDir(context), "cache");
+    }
+
+    public static long getCacheSizeBytes(Context context) {
+        File cacheDir = getCacheDir(context);
+        return calculateDirectorySize(cacheDir);
+    }
+
+    private static long calculateDirectorySize(File dir) {
+        if (dir == null || !dir.exists()) return 0;
+        long size = 0;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    size += calculateDirectorySize(file);
+                } else {
+                    size += file.length();
+                }
+            }
+        }
+        return size;
+    }
+
+    public static boolean clearCache(Context context) {
+        File cacheDir = getCacheDir(context);
+        if (!cacheDir.exists()) return true;
+        return deleteDirectoryContents(cacheDir);
+    }
+
+    private static boolean deleteDirectoryContents(File dir) {
+        if (dir == null || !dir.exists()) return true;
+        boolean success = true;
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    success &= deleteDirectoryContents(file);
+                    file.delete();
+                } else {
+                    success &= file.delete();
+                }
+            }
+        }
+        return success;
+    }
+
+    public static String getTomlValue(String toml, String key, String defaultValue) {
+        if (toml == null) return defaultValue;
+        Pattern pattern = Pattern.compile("(?m)^\\s*" + Pattern.quote(key) + "\\s*=\\s*['\"]?([^'\"\\r\\n#]+)['\"]?");
+        Matcher matcher = pattern.matcher(toml);
+        if (matcher.find()) {
+            String val = matcher.group(1);
+            return (val != null) ? val.trim() : defaultValue;
+        }
+        return defaultValue;
+    }
+
     public static File getDefaultXexFile(Context context) {
         return new File(getGameDir(context), "default.xex");
     }
@@ -77,13 +136,14 @@ public class GameConfigManager {
     public static void ensureDriverPreferencesMigrated(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         if (!prefs.getBoolean(PREF_DRIVER_MIGRATED_V2, false)) {
-            // Revert any previously auto-activated Turnip default to system driver
+            if (!prefs.contains(PREF_USE_TURNIP)) {
+                prefs.edit().putBoolean(PREF_USE_TURNIP, false).apply();
+            }
             prefs.edit()
-                 .putBoolean(PREF_USE_TURNIP, false)
                  .putBoolean(PREF_TURNIP_IN_FLIGHT, false)
                  .putBoolean(PREF_DRIVER_MIGRATED_V2, true)
                  .apply();
-            Log.i(TAG, "Migrated driver preference to Qualcomm System Driver default");
+            Log.i(TAG, "Migrated driver preferences V2");
         }
     }
 
@@ -158,6 +218,19 @@ public class GameConfigManager {
         return new File(getStorageDir(context), "downpour.toml");
     }
 
+    public static String sanitizeWindowResolution(String toml) {
+        if (toml == null) return "";
+        try {
+            int w = Integer.parseInt(getTomlValue(toml, "window_width", "1280"));
+            int h = Integer.parseInt(getTomlValue(toml, "window_height", "720"));
+            if (w < 1280 || h < 720) {
+                toml = updateOrAddTomlKey(toml, "window_width", "1280");
+                toml = updateOrAddTomlKey(toml, "window_height", "720");
+            }
+        } catch (Exception ignored) {}
+        return toml;
+    }
+
     public static String loadTomlContent(Context context) {
         File tomlFile = getTomlConfigFile(context);
         if (tomlFile.exists() && tomlFile.isFile()) {
@@ -168,13 +241,18 @@ public class GameConfigManager {
                 while ((line = reader.readLine()) != null) {
                     sb.append(line).append("\n");
                 }
-                return sb.toString();
+                String content = sb.toString();
+                String sanitized = sanitizeWindowResolution(content);
+                if (!sanitized.equals(content)) {
+                    saveTomlContent(context, sanitized);
+                }
+                return sanitized;
             } catch (Exception e) {
                 Log.e(TAG, "Error reading toml file: " + e.getMessage(), e);
             }
         }
         // If file doesn't exist, load from assets or return mobile template
-        return getDefaultTomlContent(context);
+        return sanitizeWindowResolution(getDefaultTomlContent(context));
     }
 
     public static boolean saveTomlContent(Context context, String content) {
@@ -211,7 +289,12 @@ public class GameConfigManager {
         return "# Silent Hill: Downpour - Android Configuration\n" +
                "# ===== Render path & quality =====\n" +
                "render_target_path_d3d12 = 'rov'\n" +
+               "video_mode_width = 1280\n" +
+               "video_mode_height = 720\n" +
+               "resolution = '720p'\n" +
                "resolution_scale = 1\n" +
+               "window_width = 1280\n" +
+               "window_height = 720\n" +
                "anisotropic_override = 2\n" +
                "swap_post_effect = 'fxaa'\n" +
                "skip_depth_color_7e3_aliasing_transfers = true\n\n" +
@@ -233,7 +316,14 @@ public class GameConfigManager {
                "execute_unclipped_draw_vs_on_cpu = false\n" +
                "direct_host_resolve = false\n" +
                "vulkan_dynamic_rendering = false\n" +
-               "async_shader_compilation = true\n";
+               "async_shader_compilation = true\n" +
+               "vulkan_pipeline_creation_threads = 4\n" +
+               "store_shaders = true\n" +
+               "vulkan_allow_present_mode_immediate = false\n" +
+               "vulkan_allow_present_mode_mailbox = false\n" +
+               "vulkan_allow_present_mode_fifo_relaxed = false\n" +
+               "texture_cache_memory_limit_soft = 256\n" +
+               "texture_cache_memory_limit_hard = 384\n";
     }
 
     public static String updateOrAddTomlKey(String toml, String key, String value) {

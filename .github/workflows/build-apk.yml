@@ -56,13 +56,28 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Create GitHub Release (On Tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Prepare APK Release Artifact
+        run: |
+          mkdir -p release-assets
+          cp src/android/app/build/outputs/apk/debug/app-debug.apk release-assets/Silent-Hill-Downpour-Android-debug.apk
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          files: src/android/app/build/outputs/apk/debug/app-debug.apk
-          name: "Silent Hill: Downpour Android Port ${{ github.ref_name }}"
+          files: release-assets/Silent-Hill-Downpour-Android-debug.apk
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Silent Hill: Downpour Android Port {0}', github.ref_name) || 'Silent Hill: Downpour Android Port (Latest Build)' }}
+          body: |
+            ### 🎮 Silent Hill: Downpour - Android Port
+            
+            - **Commit**: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+            - **Ref**: `${{ github.ref_name }}`
+            
+            #### 📦 Arquivos incluídos:
+            - `Silent-Hill-Downpour-Android-debug.apk`: APK completo compilado para arquitetura `arm64-v8a` com suporte nativo a drivers de sistema e AdrenoTools / Mesa Turnip (compatível com Android 12 até Android 15).
           draft: false
           prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

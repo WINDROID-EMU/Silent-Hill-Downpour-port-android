@@ -29,7 +29,13 @@ public class SettingsActivity extends AppCompatActivity {
     private Spinner spinnerResScale;
     private Spinner spinnerFpsLimit;
     private SwitchCompat switchVsync;
+    private Spinner spinnerVulkanPresentMode;
     private Spinner spinnerPresentEffect;
+    private SwitchCompat switchAsyncShaders;
+    private Spinner spinnerShaderThreads;
+    private Spinner spinnerTextureCache;
+    private TextView tvShaderCacheSize;
+    private Button btnClearShaderCache;
     private Button btnApplyQuickSettings;
 
     private SwitchCompat switchVirtualController;
@@ -77,7 +83,13 @@ public class SettingsActivity extends AppCompatActivity {
         spinnerResScale = findViewById(R.id.spinner_resolution_scale);
         spinnerFpsLimit = findViewById(R.id.spinner_fps_limit);
         switchVsync = findViewById(R.id.switch_vsync);
+        spinnerVulkanPresentMode = findViewById(R.id.spinner_vulkan_present_mode);
         spinnerPresentEffect = findViewById(R.id.spinner_present_effect);
+        switchAsyncShaders = findViewById(R.id.switch_async_shaders);
+        spinnerShaderThreads = findViewById(R.id.spinner_shader_threads);
+        spinnerTextureCache = findViewById(R.id.spinner_texture_cache);
+        tvShaderCacheSize = findViewById(R.id.tv_shader_cache_size);
+        btnClearShaderCache = findViewById(R.id.btn_clear_shader_cache);
         btnApplyQuickSettings = findViewById(R.id.btn_apply_quick_settings);
 
         etTomlContent = findViewById(R.id.et_toml_content);
@@ -98,8 +110,11 @@ public class SettingsActivity extends AppCompatActivity {
 
         switchUseTurnip.setOnCheckedChangeListener((buttonView, isChecked) -> {
             GameConfigManager.setTurnipEnabled(this, isChecked);
+            if (isChecked) {
+                GameConfigManager.markTurnipLaunchInProgress(this, false);
+            }
             updateDriverStatusText();
-            String msg = isChecked ? "Driver Turnip ativado! (Experimental no Android 15)" : "Driver do Sistema Qualcomm ativado (Estável)!";
+            String msg = isChecked ? "Driver Turnip ativado!" : "Driver do Sistema Qualcomm ativado (Estável)!";
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
         });
 
@@ -193,9 +208,97 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
+    private void updateShaderCacheDisplay() {
+        if (tvShaderCacheSize == null) return;
+        long bytes = GameConfigManager.getCacheSizeBytes(this);
+        double mb = bytes / (1024.0 * 1024.0);
+        tvShaderCacheSize.setText(String.format(java.util.Locale.US, "%.2f MB", mb));
+    }
+
+    private void syncQuickSettingsFromToml(String toml) {
+        // Resolution & Scale (Internal Render Target)
+        String resScale = GameConfigManager.getTomlValue(toml, "resolution_scale", "1");
+        String resPreset = GameConfigManager.getTomlValue(toml, "resolution", "720p").replace("'", "").replace("\"", "").trim().toLowerCase();
+        String videoH = GameConfigManager.getTomlValue(toml, "video_mode_height", "720").trim();
+        String winH = GameConfigManager.getTomlValue(toml, "window_height", "720").trim();
+
+        if ("2".equals(resScale)) {
+            spinnerResScale.setSelection(4); // 1440p (2x SSAA)
+        } else if ("240p".equals(resPreset) || "426x240".equals(resPreset) || "240".equals(videoH) || "240".equals(winH)) {
+            spinnerResScale.setSelection(2); // 240p
+        } else if ("480p".equals(resPreset) || "854x480".equals(resPreset) || "640x480".equals(resPreset) || "480".equals(videoH) || "480".equals(winH)) {
+            spinnerResScale.setSelection(1); // 480p
+        } else if ("1080p".equals(resPreset) || "1920x1080".equals(resPreset) || "1080".equals(videoH) || "1080".equals(winH)) {
+            spinnerResScale.setSelection(3); // 1080p
+        } else {
+            spinnerResScale.setSelection(0); // 720p (Padrão)
+        }
+
+        // FPS Limit
+        String limiterEnabled = GameConfigManager.getTomlValue(toml, "d3d12_present_frame_limiter", "true");
+        String fps = GameConfigManager.getTomlValue(toml, "d3d12_present_frame_limiter_fps", "60.0");
+        if ("false".equalsIgnoreCase(limiterEnabled)) {
+            spinnerFpsLimit.setSelection(2); // Ilimitado
+        } else if ("30.0".equals(fps) || "30".equals(fps)) {
+            spinnerFpsLimit.setSelection(1); // 30 FPS
+        } else {
+            spinnerFpsLimit.setSelection(0); // 60 FPS
+        }
+
+        // VSync
+        boolean vsyncVal = Boolean.parseBoolean(GameConfigManager.getTomlValue(toml, "vsync", "true"));
+        switchVsync.setChecked(vsyncVal);
+
+        // Vulkan Present Mode
+        boolean modeImm = Boolean.parseBoolean(GameConfigManager.getTomlValue(toml, "vulkan_allow_present_mode_immediate", "false"));
+        boolean modeMbox = Boolean.parseBoolean(GameConfigManager.getTomlValue(toml, "vulkan_allow_present_mode_mailbox", "false"));
+        boolean modeFifoRel = Boolean.parseBoolean(GameConfigManager.getTomlValue(toml, "vulkan_allow_present_mode_fifo_relaxed", "false"));
+        if (modeMbox) {
+            spinnerVulkanPresentMode.setSelection(1); // Mailbox
+        } else if (modeImm) {
+            spinnerVulkanPresentMode.setSelection(2); // Immediate
+        } else if (modeFifoRel) {
+            spinnerVulkanPresentMode.setSelection(3); // FIFO Relaxed
+        } else {
+            spinnerVulkanPresentMode.setSelection(0); // FIFO Seguro
+        }
+
+        // Present Effect / Upscaler
+        String effect = GameConfigManager.getTomlValue(toml, "present_effect", "fsr3").replace("'", "").replace("\"", "");
+        if ("fxaa".equalsIgnoreCase(effect)) {
+            spinnerPresentEffect.setSelection(1);
+        } else if ("none".equalsIgnoreCase(effect)) {
+            spinnerPresentEffect.setSelection(2);
+        } else {
+            spinnerPresentEffect.setSelection(0); // fsr3
+        }
+
+        // Async Shader Compilation
+        boolean asyncShaders = Boolean.parseBoolean(GameConfigManager.getTomlValue(toml, "async_shader_compilation", "true"));
+        switchAsyncShaders.setChecked(asyncShaders);
+
+        // Pipeline Threads
+        String threads = GameConfigManager.getTomlValue(toml, "vulkan_pipeline_creation_threads", "4");
+        if ("2".equals(threads)) spinnerShaderThreads.setSelection(1);
+        else if ("6".equals(threads)) spinnerShaderThreads.setSelection(2);
+        else if ("8".equals(threads)) spinnerShaderThreads.setSelection(3);
+        else spinnerShaderThreads.setSelection(0); // 4 threads
+
+        // Texture Cache Limits
+        String softLimit = GameConfigManager.getTomlValue(toml, "texture_cache_memory_limit_soft", "256");
+        if ("192".equals(softLimit)) spinnerTextureCache.setSelection(1);
+        else if ("384".equals(softLimit)) spinnerTextureCache.setSelection(2);
+        else spinnerTextureCache.setSelection(0); // 256/384 MB
+    }
+
     private void setupTomlSection() {
-        // Populate Spinners
-        String[] resScales = new String[] { "1x (720p - Recomendado Mobile)", "2x (1440p)" };
+        String[] resScales = new String[] {
+            "720p (1280x720 - Render Padrão Recomendado)",
+            "480p (854x480 - Render Econômico / Mais FPS)",
+            "240p (426x240 - Render Extremo / 60 FPS)",
+            "1080p (1920x1080 - Render Alta Definição)",
+            "1440p (2560x1440 - 2x SSAA Super Nitidez)"
+        };
         ArrayAdapter<String> resAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, resScales);
         spinnerResScale.setAdapter(resAdapter);
 
@@ -203,21 +306,66 @@ public class SettingsActivity extends AppCompatActivity {
         ArrayAdapter<String> fpsAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, fpsLimits);
         spinnerFpsLimit.setAdapter(fpsAdapter);
 
+        String[] presentModes = new String[] {
+            "Padrão / FIFO (VSync Seguro)",
+            "Mailbox (Triple Buffering / Sem Tearing)",
+            "Imediato (Destravado / Sem VSync)",
+            "FIFO Relaxado (VSync Adaptativo)"
+        };
+        ArrayAdapter<String> modeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, presentModes);
+        spinnerVulkanPresentMode.setAdapter(modeAdapter);
+
         String[] presentEffects = new String[] { "fsr3 (AMD FidelityFX)", "fxaa (Anti-Aliasing Rápido)", "none (Nenhum)" };
         ArrayAdapter<String> presentAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, presentEffects);
         spinnerPresentEffect.setAdapter(presentAdapter);
 
-        switchVsync.setChecked(true);
+        String[] threadOptions = new String[] {
+            "4 Threads (Padrão Recomendado)",
+            "2 Threads (Economia de Bateria)",
+            "6 Threads (CPUs Rápidas)",
+            "8 Threads (Máximo Desempenho)"
+        };
+        ArrayAdapter<String> threadAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, threadOptions);
+        spinnerShaderThreads.setAdapter(threadAdapter);
+
+        String[] cacheOptions = new String[] {
+            "Padrão Móvel (256 MB soft / 384 MB hard)",
+            "Econômico (192 MB soft / 256 MB hard - 4GB RAM)",
+            "Alto Desempenho (384 MB soft / 512 MB hard - 8GB+ RAM)"
+        };
+        ArrayAdapter<String> cacheAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, cacheOptions);
+        spinnerTextureCache.setAdapter(cacheAdapter);
 
         // Load TOML Content into EditText
         String currentToml = GameConfigManager.loadTomlContent(this);
         etTomlContent.setText(currentToml);
+        syncQuickSettingsFromToml(currentToml);
+
+        // Shader Cache Management
+        updateShaderCacheDisplay();
+        btnClearShaderCache.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                .setTitle("Limpar Cache de Shaders")
+                .setMessage("Deseja apagar os shaders SPIR-V e pipelines salvos em disco?\n\nIsso pode corrigir artefatos visuais ou travamentos após atualizar o driver Turnip. Os shaders serão recompilados na próxima execução.")
+                .setPositiveButton("Sim, Limpar", (dialog, which) -> {
+                    boolean ok = GameConfigManager.clearCache(this);
+                    updateShaderCacheDisplay();
+                    if (ok) {
+                        Toast.makeText(this, "Cache de shaders limpo com sucesso!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "Falha ao limpar cache.", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+        });
 
         // Save Raw TOML
         btnSaveToml.setOnClickListener(v -> {
             String newContent = etTomlContent.getText().toString();
             boolean ok = GameConfigManager.saveTomlContent(this, newContent);
             if (ok) {
+                syncQuickSettingsFromToml(newContent);
                 Toast.makeText(this, "Arquivo downpour.toml salvo com sucesso!", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "Falha ao salvar downpour.toml.", Toast.LENGTH_LONG).show();
@@ -233,6 +381,7 @@ public class SettingsActivity extends AppCompatActivity {
                     String def = GameConfigManager.getDefaultTomlContent(this);
                     etTomlContent.setText(def);
                     GameConfigManager.saveTomlContent(this, def);
+                    syncQuickSettingsFromToml(def);
                     Toast.makeText(this, "Configurações padrão restauradas!", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancelar", null)
@@ -243,9 +392,44 @@ public class SettingsActivity extends AppCompatActivity {
         btnApplyQuickSettings.setOnClickListener(v -> {
             String toml = etTomlContent.getText().toString();
 
-            // Resolution Scale
-            int resScaleVal = spinnerResScale.getSelectedItemPosition() == 1 ? 2 : 1;
-            toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution_scale", String.valueOf(resScaleVal));
+            // Resolution & Resolution Scale (Internal Render Target in UE3)
+            int resPos = spinnerResScale.getSelectedItemPosition();
+            if (resPos == 1) { // 480p
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_width", "854");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_height", "480");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution", "'854x480'");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution_scale", "1");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_height", "720");
+            } else if (resPos == 2) { // 240p
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_width", "426");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_height", "240");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution", "'426x240'");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution_scale", "1");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_height", "720");
+            } else if (resPos == 3) { // 1080p
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_width", "1920");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_height", "1080");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution", "'1080p'");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution_scale", "1");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_height", "720");
+            } else if (resPos == 4) { // 1440p (2x SSAA)
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_height", "720");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution", "'720p'");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution_scale", "2");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_height", "720");
+            } else { // 720p (Padrão)
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "video_mode_height", "720");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution", "'720p'");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "resolution_scale", "1");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_width", "1280");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "window_height", "720");
+            }
 
             // FPS Limit
             int fpsPos = spinnerFpsLimit.getSelectedItemPosition();
@@ -262,10 +446,51 @@ public class SettingsActivity extends AppCompatActivity {
             // VSync
             toml = GameConfigManager.updateOrAddTomlKey(toml, "vsync", switchVsync.isChecked() ? "true" : "false");
 
+            // Vulkan Present Mode
+            int modePos = spinnerVulkanPresentMode.getSelectedItemPosition();
+            if (modePos == 1) { // Mailbox
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_mailbox", "true");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_immediate", "false");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_fifo_relaxed", "false");
+            } else if (modePos == 2) { // Immediate
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_mailbox", "false");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_immediate", "true");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_fifo_relaxed", "false");
+            } else if (modePos == 3) { // FIFO Relaxed
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_mailbox", "false");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_immediate", "false");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_fifo_relaxed", "true");
+            } else { // Standard FIFO
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_mailbox", "false");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_immediate", "false");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_allow_present_mode_fifo_relaxed", "false");
+            }
+
             // Present Effect
             int effPos = spinnerPresentEffect.getSelectedItemPosition();
             String effName = (effPos == 0) ? "'fsr3'" : (effPos == 1 ? "'fxaa'" : "'none'");
             toml = GameConfigManager.updateOrAddTomlKey(toml, "present_effect", effName);
+
+            // Async Shader Compilation & Pipeline Threads
+            toml = GameConfigManager.updateOrAddTomlKey(toml, "async_shader_compilation", switchAsyncShaders.isChecked() ? "true" : "false");
+            toml = GameConfigManager.updateOrAddTomlKey(toml, "store_shaders", "true");
+
+            int threadPos = spinnerShaderThreads.getSelectedItemPosition();
+            String threadCount = (threadPos == 1) ? "2" : (threadPos == 2 ? "6" : (threadPos == 3 ? "8" : "4"));
+            toml = GameConfigManager.updateOrAddTomlKey(toml, "vulkan_pipeline_creation_threads", threadCount);
+
+            // Texture Cache Limits
+            int cachePos = spinnerTextureCache.getSelectedItemPosition();
+            if (cachePos == 1) { // Eco
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "192");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "256");
+            } else if (cachePos == 2) { // High
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "384");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "512");
+            } else { // Default mobile
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_soft", "256");
+                toml = GameConfigManager.updateOrAddTomlKey(toml, "texture_cache_memory_limit_hard", "384");
+            }
 
             etTomlContent.setText(toml);
             GameConfigManager.saveTomlContent(this, toml);

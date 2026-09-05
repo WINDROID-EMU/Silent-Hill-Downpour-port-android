@@ -20,6 +20,15 @@
 #include "downpour_app.h"
 #include "downpour_driver.h"
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#define MAIN_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "DownpourMain", __VA_ARGS__)
+#define MAIN_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "DownpourMain", __VA_ARGS__)
+#else
+#define MAIN_LOGI(...)
+#define MAIN_LOGE(...)
+#endif
+
 namespace {
 
 int RunWindowedApp(int argc, char** argv) {
@@ -78,10 +87,13 @@ int RunWindowedApp(int argc, char** argv) {
 
   int result = EXIT_FAILURE;
   {
+    MAIN_LOGI("Initializing SDLWindowedAppContext...");
     rex::ui::SDLWindowedAppContext app_context;
     if (!app_context.Initialize()) {
+      MAIN_LOGE("app_context.Initialize() failed!");
       return EXIT_FAILURE;
     }
+    MAIN_LOGI("SDLWindowedAppContext initialized successfully.");
 
     std::unique_ptr<rex::ui::WindowedApp> app = DownpourApp::Create(app_context);
 
@@ -94,10 +106,15 @@ int RunWindowedApp(int argc, char** argv) {
     }
     app->SetParsedArguments(std::move(parsed));
 
-    result = app->OnInitialize() ? app_context.RunMainMessageLoop() : EXIT_FAILURE;
+    MAIN_LOGI("Calling app->OnInitialize()...");
+    bool init_ok = app->OnInitialize();
+    MAIN_LOGI("app->OnInitialize() returned: %s", init_ok ? "SUCCESS" : "FAILED");
+
+    result = init_ok ? app_context.RunMainMessageLoop() : EXIT_FAILURE;
 
     app->InvokeOnDestroy();
 #if defined(__ANDROID__)
+    MAIN_LOGI("Shutting down driver and Android subsystems...");
     downpour::driver::ShutdownDriver();
     rex::filesystem::AndroidShutdown();
     rex::thread::AndroidShutdown();

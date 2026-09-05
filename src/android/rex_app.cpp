@@ -719,8 +719,17 @@ bool ReXApp::SetupPresentation() {
     }
   }
 
+  // Presentation window size for fullscreen mobile display (standard 1280x720)
+  int32_t desired_w = 1280;
+  int32_t desired_h = 720;
+  if (REXCVAR_GET(window_width) >= 1280 && REXCVAR_GET(window_height) >= 720) {
+    desired_w = REXCVAR_GET(window_width);
+    desired_h = REXCVAR_GET(window_height);
+  }
+  REXLOG_INFO("Creating presentation window with resolution {}x{}", desired_w, desired_h);
+
   // Create window
-  window_ = rex::ui::Window::Create(app_context(), GetName(), 1280, 720);
+  window_ = rex::ui::Window::Create(app_context(), GetName(), desired_w, desired_h);
   if (!window_) {
     REXLOG_ERROR("Failed to create window");
     return false;

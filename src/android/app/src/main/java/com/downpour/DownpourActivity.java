@@ -186,10 +186,6 @@ public class DownpourActivity extends SDLActivity {
 
     private void initDriverConfiguration() {
         GameConfigManager.ensureDriverPreferencesMigrated(this);
-        boolean recovered = GameConfigManager.checkAndRecoverTurnipCrash(this);
-        if (recovered) {
-            runOnUiThread(() -> Toast.makeText(this, "Driver Turnip falhou no Android 15. Alternado para o Driver do Sistema Qualcomm.", Toast.LENGTH_LONG).show());
-        }
 
         SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         boolean useTurnip = prefs.getBoolean(PREF_USE_TURNIP, false);
@@ -272,6 +268,8 @@ public class DownpourActivity extends SDLActivity {
         GameConfigManager.markTurnipLaunchInProgress(this, false);
         super.onDestroy();
     }
+
+
 
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {

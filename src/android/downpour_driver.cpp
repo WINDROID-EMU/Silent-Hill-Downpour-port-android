@@ -30,6 +30,7 @@ static DriverConfig g_driver_config;
 static std::mutex g_driver_mutex;
 static void* g_adrenotools_vulkan_handle = nullptr;
 static void* (*g_real_dlopen)(const char* filename, int flags) = nullptr;
+static int (*g_real_dlclose)(void* handle) = nullptr;
 
 static void* HookedDlopen(const char* filename, int flags) {
   if (filename && g_adrenotools_vulkan_handle) {
@@ -42,7 +43,18 @@ static void* HookedDlopen(const char* filename, int flags) {
   if (!g_real_dlopen) {
     g_real_dlopen = reinterpret_cast<void*(*)(const char*, int)>(dlsym(RTLD_DEFAULT, "dlopen"));
   }
-  return g_real_dlopen(filename, flags);
+  return g_real_dlopen ? g_real_dlopen(filename, flags) : nullptr;
+}
+
+static int HookedDlclose(void* handle) {
+  if (handle && g_adrenotools_vulkan_handle && handle == g_adrenotools_vulkan_handle) {
+    LOGI("HookedDlclose: Preserving AdrenoTools Turnip handle (%p) against dlclose call", handle);
+    return 0; // Shield the custom Vulkan driver from premature dlclose unmapping
+  }
+  if (!g_real_dlclose) {
+    g_real_dlclose = reinterpret_cast<int(*)(void*)>(dlsym(RTLD_DEFAULT, "dlclose"));
+  }
+  return g_real_dlclose ? g_real_dlclose(handle) : 0;
 }
 
 static bool PatchGotSlot(void* target_addr, void* new_func, void** old_func) {
@@ -63,7 +75,7 @@ static bool PatchGotSlot(void* target_addr, void* new_func, void** old_func) {
   return true;
 }
 
-static void ScanLibraryGotForDlopen(const struct dl_phdr_info* info, void**& out_got_dlopen) {
+static void ScanLibraryGot(const struct dl_phdr_info* info, void**& out_got_dlopen, void**& out_got_dlclose) {
   ElfW(Addr) base = info->dlpi_addr;
   const ElfW(Phdr)* dynamic_phdr = nullptr;
   for (int i = 0; i < info->dlpi_phnum; ++i) {
@@ -117,6 +129,8 @@ static void ScanLibraryGotForDlopen(const struct dl_phdr_info* info, void**& out
       const char* sym_name = strtab + symtab[sym_idx].st_name;
       if (strcmp(sym_name, "dlopen") == 0 && !out_got_dlopen) {
         out_got_dlopen = reinterpret_cast<void**>(base + r[i].r_offset);
+      } else if (strcmp(sym_name, "dlclose") == 0 && !out_got_dlclose) {
+        out_got_dlclose = reinterpret_cast<void**>(base + r[i].r_offset);
       }
     }
   };
@@ -132,17 +146,27 @@ static int DlIteratePatchDlopenCallback(struct dl_phdr_info* info, size_t, void*
 
   if (is_rexruntime || is_downpour) {
     void** got_dlopen = nullptr;
-    ScanLibraryGotForDlopen(info, got_dlopen);
+    void** got_dlclose = nullptr;
+    ScanLibraryGot(info, got_dlopen, got_dlclose);
 
-    if (is_rexruntime && !got_dlopen) {
-      // Fallback to verified ELF relocation offset in librexruntimerd.so
-      got_dlopen = reinterpret_cast<void**>(info->dlpi_addr + 0x85da80);
+    if (is_rexruntime) {
+      if (!got_dlopen) {
+        got_dlopen = reinterpret_cast<void**>(info->dlpi_addr + 0x85da80);
+      }
+      if (!got_dlclose) {
+        got_dlclose = reinterpret_cast<void**>(info->dlpi_addr + 0x85da60);
+      }
     }
 
     if (got_dlopen) {
       PatchGotSlot(got_dlopen, reinterpret_cast<void*>(&HookedDlopen),
                    reinterpret_cast<void**>(&g_real_dlopen));
       LOGI("Patched dlopen GOT slot in %s at %p", info->dlpi_name, got_dlopen);
+    }
+    if (got_dlclose) {
+      PatchGotSlot(got_dlclose, reinterpret_cast<void*>(&HookedDlclose),
+                   reinterpret_cast<void**>(&g_real_dlclose));
+      LOGI("Patched dlclose GOT slot in %s at %p", info->dlpi_name, got_dlclose);
     }
   }
   return 0;
@@ -242,8 +266,15 @@ bool IsTurnipActive() {
 void ShutdownDriver() {
   std::lock_guard<std::mutex> lock(g_driver_mutex);
   if (g_adrenotools_vulkan_handle) {
-    LOGI("Shutting down AdrenoTools driver");
+    LOGI("Shutting down AdrenoTools driver (%p)", g_adrenotools_vulkan_handle);
+    void* handle = g_adrenotools_vulkan_handle;
     g_adrenotools_vulkan_handle = nullptr;
+    if (!g_real_dlclose) {
+      g_real_dlclose = reinterpret_cast<int(*)(void*)>(dlsym(RTLD_DEFAULT, "dlclose"));
+    }
+    if (g_real_dlclose) {
+      g_real_dlclose(handle);
+    }
   }
 }
 
@@ -260,14 +291,14 @@ void LogTextureCompressionSupport() {
   auto pfn_vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(vk_lib, "vkGetInstanceProcAddr"));
   if (!pfn_vkGetInstanceProcAddr) {
     __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "Failed to dlsym vkGetInstanceProcAddr");
-    dlclose(vk_lib);
+    if (vk_lib != g_adrenotools_vulkan_handle && g_real_dlclose) g_real_dlclose(vk_lib);
     return;
   }
 
   auto pfn_vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(pfn_vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
   if (!pfn_vkCreateInstance) {
     __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "Failed to resolve vkCreateInstance");
-    dlclose(vk_lib);
+    if (vk_lib != g_adrenotools_vulkan_handle && g_real_dlclose) g_real_dlclose(vk_lib);
     return;
   }
 
@@ -287,7 +318,7 @@ void LogTextureCompressionSupport() {
   VkResult res = pfn_vkCreateInstance(&inst_info, nullptr, &instance);
   if (res != VK_SUCCESS || instance == VK_NULL_HANDLE) {
     __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "vkCreateInstance failed: %d", res);
-    dlclose(vk_lib);
+    if (vk_lib != g_adrenotools_vulkan_handle && g_real_dlclose) g_real_dlclose(vk_lib);
     return;
   }
 
@@ -344,7 +375,10 @@ void LogTextureCompressionSupport() {
   if (pfn_vkDestroyInstance) {
     pfn_vkDestroyInstance(instance, nullptr);
   }
-  dlclose(vk_lib);
+  // DO NOT dlclose(vk_lib) here if it is the Turnip driver, to prevent unmapping it.
+  if (vk_lib != g_adrenotools_vulkan_handle && g_real_dlclose) {
+    g_real_dlclose(vk_lib);
+  }
 }
 
 }  // namespace downpour::driver
