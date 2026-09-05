@@ -38,6 +38,8 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
@@ -485,7 +487,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
         setContentView(mLayout);
 
-        setWindowStyle(false);
+        setWindowStyle(true);
 
         getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(this);
 
@@ -923,6 +925,14 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                             window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                             window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
                             SDLActivity.mFullscreenModeActive = true;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                window.setDecorFitsSystemWindows(false);
+                                WindowInsetsController insetsController = window.getInsetsController();
+                                if (insetsController != null) {
+                                    insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                                }
+                            }
                         } else {
                             int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_VISIBLE;
                             window.getDecorView().setSystemUiVisibility(flags);
@@ -930,8 +940,14 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                             SDLActivity.mFullscreenModeActive = false;
                         }
-                        if (Build.VERSION.SDK_INT >= 30 /* Android 11 (R) */) {
-                            window.getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            WindowManager.LayoutParams lp = window.getAttributes();
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+                            } else {
+                                lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                            }
+                            window.setAttributes(lp);
                         }
                         if (Build.VERSION.SDK_INT >= 30 /* Android 11 (R) */ &&
                             Build.VERSION.SDK_INT < 35 /* Android 15 */) {
@@ -1769,6 +1785,15 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.INVISIBLE;
 
             SDLActivity.this.getWindow().getDecorView().setSystemUiVisibility(flags);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                SDLActivity.this.getWindow().setDecorFitsSystemWindows(false);
+                WindowInsetsController insetsController = SDLActivity.this.getWindow().getInsetsController();
+                if (insetsController != null) {
+                    insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            }
         }
     };
 
@@ -1778,7 +1803,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             Handler handler = getWindow().getDecorView().getHandler();
             if (handler != null) {
                 handler.removeCallbacks(rehideSystemUi); // Prevent a hide loop.
-                handler.postDelayed(rehideSystemUi, 2000);
+                handler.postDelayed(rehideSystemUi, 400);
             }
 
         }

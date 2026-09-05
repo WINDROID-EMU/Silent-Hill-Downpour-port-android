@@ -21,6 +21,13 @@
         android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
 
+        <meta-data
+            android:name="android.max_aspect"
+            android:value="2.5" />
+        <meta-data
+            android:name="notch.config"
+            android:value="portrait|landscape" />
+
         <activity
             android:name=".TitleActivity"
             android:exported="true"
@@ -46,7 +53,8 @@
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:alwaysRetainTaskState="true"
-            android:launchMode="singleTask" />
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.SilentHillDownpour" />
     </application>
 
 </manifest>
