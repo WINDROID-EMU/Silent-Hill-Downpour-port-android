@@ -44,6 +44,8 @@ public class DownpourActivity extends SDLActivity {
     private static final String PREF_DRIVER_NAME = "driver_name";
     private static final String PREF_TURBO = "turbo_mode";
 
+    private VirtualControllerLayout mVirtualController;
+
     // Native callbacks for Android bridge
     private native void nativeInit(String internalDir, String externalDir);
     private native void nativeSetDriverConfig(String driverDir, String driverName, String hookLibDir, boolean useTurnip, boolean enableTurbo);
@@ -131,6 +133,28 @@ public class DownpourActivity extends SDLActivity {
             initDriverConfiguration();
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "nativeInit unsatisfied: " + e.getMessage());
+        }
+
+        // Attach Windroid-style Virtual Controller on-screen overlay for gameplay
+        setupVirtualController();
+    }
+
+    private void setupVirtualController() {
+        SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        boolean showVirtualController = prefs.getBoolean("show_virtual_controller", true);
+
+        if (showVirtualController && mLayout != null) {
+            runOnUiThread(() -> {
+                if (mVirtualController == null) {
+                    mVirtualController = new VirtualControllerLayout(this);
+                    android.widget.RelativeLayout.LayoutParams lp = new android.widget.RelativeLayout.LayoutParams(
+                        android.widget.RelativeLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.RelativeLayout.LayoutParams.MATCH_PARENT
+                    );
+                    mLayout.addView(mVirtualController, lp);
+                    Log.i(TAG, "Virtual controller layout (XML) attached to game layout successfully");
+                }
+            });
         }
     }
 
@@ -350,6 +374,12 @@ public class DownpourActivity extends SDLActivity {
      */
     public void launchIsoPicker() {
         runOnUiThread(() -> {
+            String extraIso = getIntent().getStringExtra("EXTRA_ISO_PATH");
+            if (extraIso != null && !extraIso.isEmpty() && new File(extraIso).exists()) {
+                Log.i(TAG, "Consuming pending ISO from Intent extra: " + extraIso);
+                nativeOnIsoPicked(extraIso);
+                return;
+            }
             Toast.makeText(this, "Select Silent Hill: Downpour Xbox 360 ISO", Toast.LENGTH_LONG).show();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);

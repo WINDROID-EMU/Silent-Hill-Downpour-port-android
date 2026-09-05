@@ -22,17 +22,31 @@
         tools:targetApi="34">
 
         <activity
-            android:name=".DownpourActivity"
+            android:name=".TitleActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
-            android:alwaysRetainTaskState="true"
-            android:launchMode="singleTask">
+            android:theme="@style/Theme.SilentHillDownpour">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:theme="@style/Theme.SilentHillDownpour" />
+
+        <activity
+            android:name=".DownpourActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:alwaysRetainTaskState="true"
+            android:launchMode="singleTask" />
     </application>
 
 </manifest>
