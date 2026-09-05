@@ -926,11 +926,16 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                             window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
                             SDLActivity.mFullscreenModeActive = true;
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                window.setDecorFitsSystemWindows(false);
-                                WindowInsetsController insetsController = window.getInsetsController();
-                                if (insetsController != null) {
-                                    insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                                try {
+                                    window.setDecorFitsSystemWindows(false);
+                                    View decorView = window.getDecorView();
+                                    WindowInsetsController insetsController = decorView != null ? decorView.getWindowInsetsController() : null;
+                                    if (insetsController != null) {
+                                        insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                                        insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                                    }
+                                } catch (Throwable t) {
+                                    // Safe fallback
                                 }
                             }
                         } else {
@@ -1787,11 +1792,19 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             SDLActivity.this.getWindow().getDecorView().setSystemUiVisibility(flags);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                SDLActivity.this.getWindow().setDecorFitsSystemWindows(false);
-                WindowInsetsController insetsController = SDLActivity.this.getWindow().getInsetsController();
-                if (insetsController != null) {
-                    insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                    insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                try {
+                    Window win = SDLActivity.this.getWindow();
+                    if (win != null) {
+                        win.setDecorFitsSystemWindows(false);
+                        View decorView = win.getDecorView();
+                        WindowInsetsController insetsController = decorView != null ? decorView.getWindowInsetsController() : null;
+                        if (insetsController != null) {
+                            insetsController.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                            insetsController.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                        }
+                    }
+                } catch (Throwable t) {
+                    // Safe fallback
                 }
             }
         }
