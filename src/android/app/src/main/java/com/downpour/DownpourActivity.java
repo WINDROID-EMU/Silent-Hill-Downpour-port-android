@@ -1,33 +1,52 @@
 package com.downpour;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.PowerManager;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.Display;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import org.libsdl.app.SDLActivity;
+import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class DownpourActivity extends SDLActivity {
 
     private static final String TAG = "DownpourActivity";
     private static final int REQUEST_CODE_ISO = 1001;
     private static final int REQUEST_CODE_TU = 1002;
+    private static final int REQUEST_CODE_DRIVER_ZIP = 1003;
+
+    private static final String PREF_NAME = "downpour_settings";
+    private static final String PREF_USE_TURNIP = "use_turnip";
+    private static final String PREF_DRIVER_NAME = "driver_name";
+    private static final String PREF_TURBO = "turbo_mode";
 
     // Native callbacks for Android bridge
     private native void nativeInit(String internalDir, String externalDir);
+    private native void nativeSetDriverConfig(String driverDir, String driverName, String hookLibDir, boolean useTurnip, boolean enableTurbo);
     private static native void nativeOnIsoPicked(String path);
     private static native void nativeOnTuFilePicked(String path);
 
@@ -55,8 +74,48 @@ public class DownpourActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Force landscape orientation
-        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        // Force landscape orientation (allowing 180 flip)
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+
+        // Keep screen on during gameplay and cutscenes
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Enable Sustained Performance Mode to prevent thermal throttling clock drops
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null && pm.isSustainedPerformanceModeSupported()) {
+                getWindow().setSustainedPerformanceMode(true);
+                Log.i(TAG, "Android Sustained Performance Mode activated");
+            }
+        }
+
+        // Lock display to the highest supported refresh rate (e.g. 120Hz / 90Hz)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Display display = getDisplay();
+            if (display != null) {
+                Display.Mode[] modes = display.getSupportedModes();
+                Display.Mode bestMode = null;
+                for (Display.Mode m : modes) {
+                    if (bestMode == null || m.getRefreshRate() > bestMode.getRefreshRate()) {
+                        bestMode = m;
+                    }
+                }
+                if (bestMode != null && bestMode.getRefreshRate() > 60.0f) {
+                    WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    lp.preferredDisplayModeId = bestMode.getModeId();
+                    getWindow().setAttributes(lp);
+                    Log.i(TAG, "Locked display refresh rate to " + bestMode.getRefreshRate() + "Hz (mode " + bestMode.getModeId() + ")");
+                }
+            }
+        }
+
+        // Query native audio parameters to optimize buffer sizes
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am != null) {
+            String nativeSampleRate = am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
+            String nativeBufferSize = am.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER);
+            Log.i(TAG, "Native Audio: SampleRate=" + nativeSampleRate + ", BufferSize=" + nativeBufferSize);
+        }
 
         // Check storage permissions
         checkStoragePermissions();
@@ -69,9 +128,46 @@ public class DownpourActivity extends SDLActivity {
         Log.i(TAG, "Initializing native layer: internal=" + internalDir + ", external=" + externalDir);
         try {
             nativeInit(internalDir, externalDir);
+            initDriverConfiguration();
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "nativeInit unsatisfied: " + e.getMessage());
         }
+    }
+
+    private void initDriverConfiguration() {
+        SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        boolean useTurnip = prefs.getBoolean(PREF_USE_TURNIP, true);
+        boolean turbo = prefs.getBoolean(PREF_TURBO, true);
+        String driverName = prefs.getString(PREF_DRIVER_NAME, "vulkan.adreno.so");
+
+        File customDriverDir = new File(getFilesDir(), "custom_driver");
+        String hookLibDir = getApplicationInfo().nativeLibraryDir;
+
+        // Auto-detect if custom driver exists or if another .so was copied
+        File driverFile = new File(customDriverDir, driverName);
+        if (!driverFile.exists() && customDriverDir.exists()) {
+            File[] files = customDriverDir.listFiles((dir, name) -> name.endsWith(".so"));
+            if (files != null && files.length > 0) {
+                driverName = files[0].getName();
+                driverFile = files[0];
+                prefs.edit().putString(PREF_DRIVER_NAME, driverName).apply();
+            }
+        }
+
+        boolean hasCustomDriver = driverFile.exists();
+        if (useTurnip && hasCustomDriver) {
+            Log.i(TAG, "Configuring AdrenoTools Turnip driver: dir=" + customDriverDir.getAbsolutePath() + ", name=" + driverName);
+            nativeSetDriverConfig(customDriverDir.getAbsolutePath(), driverName, hookLibDir, true, turbo);
+        } else {
+            Log.i(TAG, "Configuring System Vulkan driver (Turnip active=" + (useTurnip && hasCustomDriver) + ")");
+            nativeSetDriverConfig("", "", hookLibDir, false, false);
+        }
+    }
+
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        // Prevent SDLActivity from overriding orientation to portrait if w < h initially
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
     }
 
     private void checkStoragePermissions() {
@@ -89,6 +185,164 @@ public class DownpourActivity extends SDLActivity {
                 }
             }
         }
+    }
+
+    /**
+     * Called to launch the AdrenoTools Turnip driver ZIP picker
+     */
+    public void launchDriverPicker() {
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Selecione o arquivo ZIP do driver Turnip (AdrenoTools)", Toast.LENGTH_LONG).show();
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            startActivityForResult(intent, REQUEST_CODE_DRIVER_ZIP);
+        });
+    }
+
+    /**
+     * Shows dialog to toggle between System Driver and Turnip Driver
+     */
+    public void showDriverSelectionDialog() {
+        runOnUiThread(() -> {
+            SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+            boolean currentUseTurnip = prefs.getBoolean(PREF_USE_TURNIP, true);
+            String currentDriver = prefs.getString(PREF_DRIVER_NAME, "vulkan.adreno.so");
+            File customDriverDir = new File(getFilesDir(), "custom_driver");
+            boolean hasTurnip = new File(customDriverDir, currentDriver).exists();
+
+            String[] options = new String[] {
+                "1. Driver do Sistema (Padrão Vulkan OEM)" + (!currentUseTurnip ? " [ATIVO]" : ""),
+                "2. Driver Turnip AdrenoTools (" + (hasTurnip ? currentDriver : "Não instalado") + ")" + (currentUseTurnip && hasTurnip ? " [ATIVO]" : ""),
+                "3. Instalar / Atualizar Driver Turnip (.zip)..."
+            };
+
+            new AlertDialog.Builder(this)
+                .setTitle("Configuração de Driver Gráfico GPU")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        prefs.edit().putBoolean(PREF_USE_TURNIP, false).apply();
+                        Toast.makeText(this, "Driver do Sistema selecionado. Reinicie o jogo se necessário.", Toast.LENGTH_SHORT).show();
+                        initDriverConfiguration();
+                    } else if (which == 1) {
+                        if (hasTurnip) {
+                            prefs.edit().putBoolean(PREF_USE_TURNIP, true).apply();
+                            Toast.makeText(this, "Driver Turnip ativado. Reinicie o jogo se necessário.", Toast.LENGTH_SHORT).show();
+                            initDriverConfiguration();
+                        } else {
+                            Toast.makeText(this, "Nenhum driver Turnip instalado. Selecione um arquivo .zip para instalar.", Toast.LENGTH_LONG).show();
+                            launchDriverPicker();
+                        }
+                    } else if (which == 2) {
+                        launchDriverPicker();
+                    }
+                })
+                .setNegativeButton("Fechar", null)
+                .show();
+        });
+    }
+
+    /**
+     * Extracts an AdrenoTools ZIP package into private app files
+     */
+    private void handlePickedDriverZip(Uri uri) {
+        new Thread(() -> {
+            try {
+                runOnUiThread(() -> Toast.makeText(this, "Extraindo pacote de driver Turnip...", Toast.LENGTH_SHORT).show());
+                File customDir = new File(getFilesDir(), "custom_driver");
+                if (customDir.exists()) {
+                    File[] oldFiles = customDir.listFiles();
+                    if (oldFiles != null) {
+                        for (File f : oldFiles) f.delete();
+                    }
+                } else {
+                    customDir.mkdirs();
+                }
+
+                String resolvedLibraryName = null;
+
+                try (InputStream rawIn = getContentResolver().openInputStream(uri);
+                     BufferedInputStream bufIn = new BufferedInputStream(rawIn);
+                     ZipInputStream zipIn = new ZipInputStream(bufIn)) {
+
+                    ZipEntry entry;
+                    byte[] buffer = new byte[64 * 1024];
+
+                    while ((entry = zipIn.getNextEntry()) != null) {
+                        String name = entry.getName();
+                        if (entry.isDirectory() || name.contains("..")) {
+                            zipIn.closeEntry();
+                            continue;
+                        }
+
+                        String simpleName = new File(name).getName();
+                        File outFile = new File(customDir, simpleName);
+
+                        if ("meta.json".equalsIgnoreCase(simpleName)) {
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            int len;
+                            while ((len = zipIn.read(buffer)) > 0) {
+                                baos.write(buffer, 0, len);
+                            }
+                            byte[] jsonBytes = baos.toByteArray();
+                            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                                fos.write(jsonBytes);
+                            }
+                            try {
+                                JSONObject json = new JSONObject(new String(jsonBytes, "UTF-8"));
+                                resolvedLibraryName = json.optString("libraryName", null);
+                            } catch (Exception e) {
+                                Log.w(TAG, "Failed to parse meta.json: " + e.getMessage());
+                            }
+                        } else {
+                            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                                int len;
+                                while ((len = zipIn.read(buffer)) > 0) {
+                                    fos.write(buffer, 0, len);
+                                }
+                            }
+                            if (simpleName.endsWith(".so") && resolvedLibraryName == null) {
+                                if (simpleName.equals("vulkan.adreno.so") || simpleName.contains("turnip") || simpleName.contains("freedreno")) {
+                                    resolvedLibraryName = simpleName;
+                                }
+                            }
+                        }
+                        zipIn.closeEntry();
+                    }
+                }
+
+                if (resolvedLibraryName == null) {
+                    File[] files = customDir.listFiles((dir, name) -> name.endsWith(".so"));
+                    if (files != null && files.length > 0) {
+                        resolvedLibraryName = files[0].getName();
+                    }
+                }
+
+                if (resolvedLibraryName == null) {
+                    runOnUiThread(() -> Toast.makeText(this, "Erro: Nenhuma biblioteca .so encontrada no arquivo ZIP.", Toast.LENGTH_LONG).show());
+                    return;
+                }
+
+                SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+                prefs.edit()
+                     .putBoolean(PREF_USE_TURNIP, true)
+                     .putString(PREF_DRIVER_NAME, resolvedLibraryName)
+                     .apply();
+
+                String finalName = resolvedLibraryName;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Driver Turnip '" + finalName + "' instalado com sucesso! Reiniciando...", Toast.LENGTH_LONG).show();
+                });
+
+                initDriverConfiguration();
+                Thread.sleep(1500);
+                restartActivity();
+
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to extract driver zip: " + e.getMessage(), e);
+                runOnUiThread(() -> Toast.makeText(this, "Falha ao extrair driver: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     /**
@@ -133,6 +387,12 @@ public class DownpourActivity extends SDLActivity {
             } else {
                 Log.i(TAG, "TU file picking cancelled");
                 nativeOnTuFilePicked(null);
+            }
+        } else if (requestCode == REQUEST_CODE_DRIVER_ZIP) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                handlePickedDriverZip(data.getData());
+            } else {
+                Log.i(TAG, "Driver ZIP selection cancelled");
             }
         }
     }

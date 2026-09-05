@@ -18,6 +18,7 @@
 
 #include "generated/default/downpour_init.h"
 #include "downpour_app.h"
+#include "downpour_driver.h"
 
 namespace {
 
@@ -36,6 +37,44 @@ int RunWindowedApp(int argc, char** argv) {
     rex::cvar::SetFlagByName("log_file", (ext / "logs" / "downpour.log").string());
   }
   rex::InitLoggingEarly();
+
+  // Mobile Turnip/Adreno GPU rendering flags
+  rex::cvar::SetFlagByName("vulkan_async_skip_incomplete_frames", "true");
+  rex::cvar::SetFlagByName("readback_resolve", "none");
+  rex::cvar::SetFlagByName("vulkan_readback_resolve", "false");
+  rex::cvar::SetFlagByName("gamma_render_target_as_unorm16", "true");
+  rex::cvar::SetFlagByName("gpu_allow_invalid_fetch_constants", "true");
+  rex::cvar::SetFlagByName("snorm16_render_target_full_range", "true");
+  rex::cvar::SetFlagByName("vulkan_force_convert_quad_lists_to_triangle_lists", "true");
+  rex::cvar::SetFlagByName("vulkan_force_expand_rectangle_lists_in_vs", "true");
+  rex::cvar::SetFlagByName("vulkan_force_expand_point_sprites_in_vs", "true");
+  rex::cvar::SetFlagByName("execute_unclipped_draw_vs_on_cpu", "false");
+  rex::cvar::SetFlagByName("direct_host_resolve", "false");
+  rex::cvar::SetFlagByName("vulkan_dynamic_rendering", "false");
+
+  // Asynchronous shader compilation (prevents micro-stutters during gameplay)
+  rex::cvar::SetFlagByName("async_shader_compilation", "true");
+  rex::cvar::SetFlagByName("vulkan_pipeline_creation_threads", "4");
+  rex::cvar::SetFlagByName("store_shaders", "true");
+
+  // Mobile texture cache limits (prevent Android Low Memory Killer OOM)
+  rex::cvar::SetFlagByName("texture_cache_memory_limit_soft", "256");
+  rex::cvar::SetFlagByName("texture_cache_memory_limit_hard", "384");
+  rex::cvar::SetFlagByName("texture_cache_memory_limit_render_to_texture", "64");
+
+  // Mobile bandwidth & fillrate optimizations
+  rex::cvar::SetFlagByName("native_2x_msaa", "false");
+  rex::cvar::SetFlagByName("anisotropic_override", "2");
+  rex::cvar::SetFlagByName("readback_memexport", "false");
+  rex::cvar::SetFlagByName("readback_memexport_fast", "true");
+  rex::cvar::SetFlagByName("vulkan_sparse_shared_memory", "false");
+  rex::cvar::SetFlagByName("vulkan_submit_on_primary_buffer_end", "true");
+  rex::cvar::SetFlagByName("vsync", "true");
+
+#if defined(__ANDROID__)
+  // Initialize Turnip / custom AdrenoTools driver before SDL3/Vulkan initialization
+  downpour::driver::InitializeDriver();
+#endif
 
   int result = EXIT_FAILURE;
   {
@@ -59,6 +98,7 @@ int RunWindowedApp(int argc, char** argv) {
 
     app->InvokeOnDestroy();
 #if defined(__ANDROID__)
+    downpour::driver::ShutdownDriver();
     rex::filesystem::AndroidShutdown();
     rex::thread::AndroidShutdown();
     rex::memory::AndroidShutdown();

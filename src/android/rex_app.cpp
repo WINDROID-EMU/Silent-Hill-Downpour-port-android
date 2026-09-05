@@ -58,17 +58,76 @@ REXCVAR_DEFINE_STRING(gpu_plugin, "", "GPU",
 #include <unistd.h>
 #include <android/log.h>
 #include <pthread.h>
+#include <elf.h>
 #include <mutex>
 #include <unordered_set>
+#include <cstring>
+#include <cerrno>
 
 namespace {
 
 static std::mutex g_thread_tracking_mutex;
 static std::unordered_set<pthread_t> g_active_threads;
+static std::unordered_set<pthread_t> g_joined_or_detached_threads;
 
 static int (*g_real_pthread_create)(pthread_t*, const pthread_attr_t*, void*(*)(void*), void*) = nullptr;
 static int (*g_real_pthread_join)(pthread_t, void**) = nullptr;
 static int (*g_real_pthread_detach)(pthread_t) = nullptr;
+
+static bool IsPointerMapped(const void* ptr) {
+  uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
+  if (addr < 0x10000) return false;
+  uintptr_t page = addr & ~static_cast<uintptr_t>(4095);
+  unsigned char vec = 0;
+  return mincore(reinterpret_cast<void*>(page), 1, &vec) == 0;
+}
+
+#include <sys/resource.h>
+#include <sched.h>
+
+struct ThreadStartArg {
+  void* (*real_start)(void*);
+  void* real_arg;
+  int detachstate;
+};
+
+static void ConfigurePerformanceThread() {
+  // Set thread priority (nice -10 for high performance game threads)
+  setpriority(PRIO_PROCESS, 0, -10);
+
+  // Set CPU affinity to Big + Prime cores
+  int num_cores = sysconf(_SC_NPROCESSORS_CONF);
+  if (num_cores > 1) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    if (num_cores >= 8) {
+      // Typically on Snapdragon 8-core: cores 4, 5, 6 are Gold/Big and 7 is Prime
+      for (int i = 4; i < num_cores; ++i) {
+        CPU_SET(i, &cpuset);
+      }
+    } else if (num_cores >= 4) {
+      for (int i = num_cores / 2; i < num_cores; ++i) {
+        CPU_SET(i, &cpuset);
+      }
+    } else {
+      for (int i = 0; i < num_cores; ++i) {
+        CPU_SET(i, &cpuset);
+      }
+    }
+    sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+  }
+}
+
+static void* PerformanceThreadWrapper(void* arg) {
+  auto* t_arg = reinterpret_cast<ThreadStartArg*>(arg);
+  void* (*real_start)(void*) = t_arg->real_start;
+  void* real_arg = t_arg->real_arg;
+  delete t_arg;
+
+  ConfigurePerformanceThread();
+
+  return real_start(real_arg);
+}
 
 static int HookedPthreadCreate(pthread_t* thread, const pthread_attr_t* attr, void* (*start_routine)(void*), void* arg) {
   int detachstate = PTHREAD_CREATE_JOINABLE;
@@ -78,49 +137,90 @@ static int HookedPthreadCreate(pthread_t* thread, const pthread_attr_t* attr, vo
   if (!g_real_pthread_create) {
     g_real_pthread_create = (int(*)(pthread_t*, const pthread_attr_t*, void*(*)(void*), void*))dlsym(RTLD_DEFAULT, "pthread_create");
   }
-  int res = g_real_pthread_create(thread, attr, start_routine, arg);
-  if (res == 0 && thread && detachstate == PTHREAD_CREATE_JOINABLE) {
+
+  auto* t_arg = new ThreadStartArg{start_routine, arg, detachstate};
+  int res = g_real_pthread_create(thread, attr, &PerformanceThreadWrapper, t_arg);
+  if (res == 0 && thread && *thread) {
     std::lock_guard<std::mutex> lock(g_thread_tracking_mutex);
-    g_active_threads.insert(*thread);
+    if (detachstate == PTHREAD_CREATE_JOINABLE) {
+      g_active_threads.insert(*thread);
+    } else {
+      g_joined_or_detached_threads.insert(*thread);
+    }
+  } else if (res != 0) {
+    delete t_arg;
   }
   return res;
 }
 
 static int HookedPthreadDetach(pthread_t thread) {
-  bool is_tracked = false;
-  {
-    std::lock_guard<std::mutex> lock(g_thread_tracking_mutex);
-    auto it = g_active_threads.find(thread);
-    if (it != g_active_threads.end()) {
-      is_tracked = true;
-      g_active_threads.erase(it);
-    }
-  }
-  if (!is_tracked) {
+  uintptr_t tval = static_cast<uintptr_t>(thread);
+  if (tval < 0x10000) {
     __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
-                        "Blocked untracked pthread_detach(%p) to prevent Bionic abort", (void*)thread);
+                        "Blocked pthread_detach on null/invalid ptr (%p)", reinterpret_cast<void*>(tval));
     return 0;
   }
+
+  {
+    std::lock_guard<std::mutex> lock(g_thread_tracking_mutex);
+    if (g_joined_or_detached_threads.find(thread) != g_joined_or_detached_threads.end()) {
+      __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
+                          "Blocked duplicate pthread_detach on already joined/detached thread (%p)", reinterpret_cast<void*>(tval));
+      return 0;
+    }
+  }
+
+  if (!IsPointerMapped(reinterpret_cast<const void*>(tval))) {
+    __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
+                        "Blocked pthread_detach on unmapped memory (%p) to prevent Bionic abort", reinterpret_cast<void*>(tval));
+    return 0;
+  }
+
   if (!g_real_pthread_detach) {
     g_real_pthread_detach = (int(*)(pthread_t))dlsym(RTLD_DEFAULT, "pthread_detach");
   }
-  return g_real_pthread_detach(thread);
+
+  int res = g_real_pthread_detach(thread);
+
+  {
+    std::lock_guard<std::mutex> lock(g_thread_tracking_mutex);
+    g_active_threads.erase(thread);
+    g_joined_or_detached_threads.insert(thread);
+  }
+
+  return res;
 }
 
 static int HookedPthreadJoin(pthread_t thread, void** retval) {
-  bool is_tracked = false;
+  uintptr_t tval = static_cast<uintptr_t>(thread);
+  if (tval < 0x10000) {
+    __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
+                        "Blocked pthread_join on null/invalid ptr (%p)", reinterpret_cast<void*>(tval));
+    if (retval) *retval = nullptr;
+    return 0;
+  }
+
+  if (pthread_equal(thread, pthread_self())) {
+    __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
+                        "Blocked pthread_join on current thread (%p) to prevent deadlock", reinterpret_cast<void*>(tval));
+    if (retval) *retval = nullptr;
+    return EDEADLK;
+  }
+
   {
     std::lock_guard<std::mutex> lock(g_thread_tracking_mutex);
-    auto it = g_active_threads.find(thread);
-    if (it != g_active_threads.end()) {
-      is_tracked = true;
-      g_active_threads.erase(it);
+    if (g_joined_or_detached_threads.find(thread) != g_joined_or_detached_threads.end()) {
+      __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
+                          "Blocked duplicate pthread_join on already joined/detached thread (%p)", reinterpret_cast<void*>(tval));
+      if (retval) *retval = nullptr;
+      return 0;
     }
   }
 
-  if (!is_tracked) {
+  // If the pointer memory is unmapped, it is a stale pointer that was freed/destroyed
+  if (!IsPointerMapped(reinterpret_cast<const void*>(tval))) {
     __android_log_print(ANDROID_LOG_WARN, "BionicPthreadFix",
-                        "Blocked invalid/stale/duplicate pthread_join(%p)! Prevented Bionic abort.", (void*)thread);
+                        "Blocked pthread_join on unmapped memory (%p) to prevent Bionic abort", reinterpret_cast<void*>(tval));
     if (retval) *retval = nullptr;
     return 0;
   }
@@ -128,44 +228,20 @@ static int HookedPthreadJoin(pthread_t thread, void** retval) {
   if (!g_real_pthread_join) {
     g_real_pthread_join = (int(*)(pthread_t, void**))dlsym(RTLD_DEFAULT, "pthread_join");
   }
-  return g_real_pthread_join(thread, retval);
-}
 
-static uintptr_t s_rexruntime_base = 0;
+  int res = g_real_pthread_join(thread, retval);
 
-static int DlIterateCallback(struct dl_phdr_info* info, size_t size, void* data) {
-  (void)size; (void)data;
-  if (info->dlpi_name && strstr(info->dlpi_name, "librexruntimerd.so")) {
-    s_rexruntime_base = (uintptr_t)info->dlpi_addr;
-    return 1;
+  {
+    std::lock_guard<std::mutex> lock(g_thread_tracking_mutex);
+    g_active_threads.erase(thread);
+    g_joined_or_detached_threads.insert(thread);
   }
-  return 0;
-}
 
-static uintptr_t FindRexRuntimeBase() {
-  s_rexruntime_base = 0;
-  dl_iterate_phdr(DlIterateCallback, nullptr);
-  if (s_rexruntime_base != 0) {
-    return s_rexruntime_base;
-  }
-  FILE* f = fopen("/proc/self/maps", "r");
-  if (f) {
-    char line[512];
-    while (fgets(line, sizeof(line), f)) {
-      if (strstr(line, "librexruntimerd.so")) {
-        uintptr_t base = 0;
-        if (sscanf(line, "%lx-", &base) == 1) {
-          s_rexruntime_base = base;
-          break;
-        }
-      }
-    }
-    fclose(f);
-  }
-  return s_rexruntime_base;
+  return res;
 }
 
 static bool PatchGotSlot(void* target_addr, void* new_func, void** old_func) {
+  if (!target_addr) return false;
   uintptr_t page_size = sysconf(_SC_PAGESIZE);
   uintptr_t addr = (uintptr_t)target_addr;
   uintptr_t page_start = addr & ~(page_size - 1);
@@ -177,35 +253,128 @@ static bool PatchGotSlot(void* target_addr, void* new_func, void** old_func) {
     return false;
   }
 
-  if (old_func) {
+  if (old_func && !*old_func) {
     *old_func = *(void**)target_addr;
   }
   *(void**)target_addr = new_func;
   return true;
 }
 
+struct LibraryGotSlots {
+  void** got_pthread_create = nullptr;
+  void** got_pthread_join = nullptr;
+  void** got_pthread_detach = nullptr;
+};
+
+static void ScanLibraryGot(const struct dl_phdr_info* info, LibraryGotSlots& out_slots) {
+  ElfW(Addr) base = info->dlpi_addr;
+  const ElfW(Phdr)* dynamic_phdr = nullptr;
+  for (int i = 0; i < info->dlpi_phnum; ++i) {
+    if (info->dlpi_phdr[i].p_type == PT_DYNAMIC) {
+      dynamic_phdr = &info->dlpi_phdr[i];
+      break;
+    }
+  }
+  if (!dynamic_phdr) return;
+
+  const ElfW(Dyn)* dyn = reinterpret_cast<const ElfW(Dyn)*>(base + dynamic_phdr->p_vaddr);
+  const ElfW(Rela)* jmprel = nullptr;
+  size_t pltrelsz = 0;
+  const ElfW(Rela)* rela = nullptr;
+  size_t relasz = 0;
+  const ElfW(Sym)* symtab = nullptr;
+  const char* strtab = nullptr;
+
+  for (; dyn->d_tag != DT_NULL; ++dyn) {
+    switch (dyn->d_tag) {
+      case DT_JMPREL:
+        jmprel = reinterpret_cast<const ElfW(Rela)*>(
+            dyn->d_un.d_ptr < base ? base + dyn->d_un.d_ptr : dyn->d_un.d_ptr);
+        break;
+      case DT_PLTRELSZ:
+        pltrelsz = dyn->d_un.d_val;
+        break;
+      case DT_RELA:
+        rela = reinterpret_cast<const ElfW(Rela)*>(
+            dyn->d_un.d_ptr < base ? base + dyn->d_un.d_ptr : dyn->d_un.d_ptr);
+        break;
+      case DT_RELASZ:
+        relasz = dyn->d_un.d_val;
+        break;
+      case DT_SYMTAB:
+        symtab = reinterpret_cast<const ElfW(Sym)*>(
+            dyn->d_un.d_ptr < base ? base + dyn->d_un.d_ptr : dyn->d_un.d_ptr);
+        break;
+      case DT_STRTAB:
+        strtab = reinterpret_cast<const char*>(
+            dyn->d_un.d_ptr < base ? base + dyn->d_un.d_ptr : dyn->d_un.d_ptr);
+        break;
+    }
+  }
+
+  auto scan_relas = [&](const ElfW(Rela)* r, size_t sz) {
+    if (!r || !symtab || !strtab) return;
+    size_t count = sz / sizeof(ElfW(Rela));
+    for (size_t i = 0; i < count; ++i) {
+      uint32_t sym_idx = ELF64_R_SYM(r[i].r_info);
+      const char* sym_name = strtab + symtab[sym_idx].st_name;
+      void** slot = reinterpret_cast<void**>(base + r[i].r_offset);
+      if (strcmp(sym_name, "pthread_create") == 0 && !out_slots.got_pthread_create) {
+        out_slots.got_pthread_create = slot;
+      } else if (strcmp(sym_name, "pthread_join") == 0 && !out_slots.got_pthread_join) {
+        out_slots.got_pthread_join = slot;
+      } else if (strcmp(sym_name, "pthread_detach") == 0 && !out_slots.got_pthread_detach) {
+        out_slots.got_pthread_detach = slot;
+      }
+    }
+  };
+
+  scan_relas(jmprel, pltrelsz);
+  scan_relas(rela, relasz);
+}
+
+static int DlIteratePatchCallback(struct dl_phdr_info* info, size_t, void*) {
+  if (!info->dlpi_name) return 0;
+
+  bool is_rexruntime = strstr(info->dlpi_name, "librexruntimerd.so") != nullptr;
+  bool is_downpour = strstr(info->dlpi_name, "libdownpour.so") != nullptr;
+
+  if (is_rexruntime || is_downpour) {
+    LibraryGotSlots slots{};
+    ScanLibraryGot(info, slots);
+
+    if (is_rexruntime) {
+      // Fallback to verified ELF relocations if dynamic scan did not locate all slots
+      if (!slots.got_pthread_create) slots.got_pthread_create = reinterpret_cast<void**>(info->dlpi_addr + 0x85d728);
+      if (!slots.got_pthread_join) slots.got_pthread_join = reinterpret_cast<void**>(info->dlpi_addr + 0x85de68);
+      if (!slots.got_pthread_detach) slots.got_pthread_detach = reinterpret_cast<void**>(info->dlpi_addr + 0x866c88);
+
+      PatchGotSlot(slots.got_pthread_create, (void*)&HookedPthreadCreate, (void**)&g_real_pthread_create);
+      PatchGotSlot(slots.got_pthread_join, (void*)&HookedPthreadJoin, (void**)&g_real_pthread_join);
+      PatchGotSlot(slots.got_pthread_detach, (void*)&HookedPthreadDetach, (void**)&g_real_pthread_detach);
+      __android_log_print(ANDROID_LOG_INFO, "BionicPthreadFix",
+                          "Patched librexruntimerd.so pthread GOT slots (create=%p, join=%p, detach=%p)",
+                          slots.got_pthread_create, slots.got_pthread_join, slots.got_pthread_detach);
+    } else if (is_downpour) {
+      if (slots.got_pthread_create) {
+        PatchGotSlot(slots.got_pthread_create, (void*)&HookedPthreadCreate, (void**)&g_real_pthread_create);
+        __android_log_print(ANDROID_LOG_INFO, "BionicPthreadFix",
+                            "Patched libdownpour.so pthread_create GOT slot (%p)", slots.got_pthread_create);
+      }
+    }
+  }
+  return 0;
+}
+
 __attribute__((constructor(101)))
 static void InitBionicPthreadFix() {
-  uintptr_t base = FindRexRuntimeBase();
-  if (!base) {
-    __android_log_print(ANDROID_LOG_ERROR, "BionicPthreadFix", "Failed to locate librexruntimerd.so base address!");
-    return;
-  }
-  __android_log_print(ANDROID_LOG_INFO, "BionicPthreadFix", "Located librexruntimerd.so at %p", (void*)base);
-
-  // librexruntimerd.so GOT offsets (ELF aarch64):
-  // 0x85d728: pthread_create
-  // 0x85de68: pthread_join
-  // 0x866c88: pthread_detach
-  PatchGotSlot((void*)(base + 0x85d728), (void*)&HookedPthreadCreate, (void**)&g_real_pthread_create);
-  PatchGotSlot((void*)(base + 0x85de68), (void*)&HookedPthreadJoin, (void**)&g_real_pthread_join);
-  PatchGotSlot((void*)(base + 0x866c88), (void*)&HookedPthreadDetach, (void**)&g_real_pthread_detach);
-
   if (!g_real_pthread_create) g_real_pthread_create = (int(*)(pthread_t*, const pthread_attr_t*, void*(*)(void*), void*))dlsym(RTLD_DEFAULT, "pthread_create");
   if (!g_real_pthread_join) g_real_pthread_join = (int(*)(pthread_t, void**))dlsym(RTLD_DEFAULT, "pthread_join");
   if (!g_real_pthread_detach) g_real_pthread_detach = (int(*)(pthread_t))dlsym(RTLD_DEFAULT, "pthread_detach");
 
-  __android_log_print(ANDROID_LOG_INFO, "BionicPthreadFix", "Bionic pthread hooks installed successfully!");
+  dl_iterate_phdr(DlIteratePatchCallback, nullptr);
+  ConfigurePerformanceThread();
+  __android_log_print(ANDROID_LOG_INFO, "BionicPthreadFix", "Bionic pthread hooks initialized successfully and main thread configured for Big.LITTLE performance cores!");
 }
 
 }  // namespace

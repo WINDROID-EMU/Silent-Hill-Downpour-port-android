@@ -20,10 +20,13 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags "-std=c++23", "-fexceptions", "-frtti"
+                cppFlags "-std=c++23", "-fexceptions", "-frtti",
+                         "-O3", "-fvectorize", "-fslp-vectorize",
+                         "-funroll-loops", "-fno-semantic-interposition"
                 arguments "-DANDROID_STL=c++_shared",
                           "-DANDROID_PLATFORM=android-26",
-                          "-DDPOUR_NO_NATIVE_RENDER=1"
+                          "-DDPOUR_NO_NATIVE_RENDER=1",
+                          "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-O3 -Wl,--gc-sections -Wl,--hash-style=gnu -Wl,-Bsymbolic-functions -Wl,-z,max-page-size=16384"
             }
         }
     }
@@ -54,6 +57,12 @@ android {
     sourceSets {
         main {
             jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }

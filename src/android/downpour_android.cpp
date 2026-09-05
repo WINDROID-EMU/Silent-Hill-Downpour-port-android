@@ -1,4 +1,5 @@
 #include "downpour_android.h"
+#include "downpour_driver.h"
 
 #if defined(__ANDROID__)
 #include <jni.h>
@@ -6,6 +7,9 @@
 #include <condition_variable>
 #include <mutex>
 #include <chrono>
+#include <signal.h>
+#include <ucontext.h>
+#include <cinttypes>
 
 #define LOG_TAG "DownpourRecomp"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -29,6 +33,67 @@ static bool g_tu_picker_done = false;
 static std::filesystem::path g_internal_files_dir;
 static std::filesystem::path g_external_files_dir;
 
+static struct sigaction g_old_sigaction_segv;
+static struct sigaction g_old_sigaction_bus;
+static struct sigaction g_old_sigaction_ill;
+static struct sigaction g_old_sigaction_fpe;
+
+static void FatalSignalHandler(int sig, siginfo_t* info, void* context) {
+  const char* sig_name = "UNKNOWN";
+  switch (sig) {
+    case SIGSEGV: sig_name = "SIGSEGV (Segmentation fault)"; break;
+    case SIGBUS:  sig_name = "SIGBUS (Bus error)"; break;
+    case SIGILL:  sig_name = "SIGILL (Illegal instruction)"; break;
+    case SIGFPE:  sig_name = "SIGFPE (Floating point exception)"; break;
+    case SIGABRT: sig_name = "SIGABRT (Aborted)"; break;
+  }
+
+  uintptr_t fault_addr = reinterpret_cast<uintptr_t>(info->si_addr);
+  __android_log_print(ANDROID_LOG_ERROR, "DownpourCrash",
+                      "================ FATAL SIGNAL CAUGHT ================");
+  __android_log_print(ANDROID_LOG_ERROR, "DownpourCrash",
+                      "Signal: %s (%d), Fault Address: 0x%" PRIxPTR ", Code: %d",
+                      sig_name, sig, fault_addr, info->si_code);
+
+  if (context) {
+    ucontext_t* uc = reinterpret_cast<ucontext_t*>(context);
+#if defined(__aarch64__)
+    uintptr_t pc = uc->uc_mcontext.pc;
+    uintptr_t sp = uc->uc_mcontext.sp;
+    uintptr_t lr = uc->uc_mcontext.regs[30];
+    __android_log_print(ANDROID_LOG_ERROR, "DownpourCrash",
+                        "PC: 0x%" PRIxPTR ", LR: 0x%" PRIxPTR ", SP: 0x%" PRIxPTR,
+                        pc, lr, sp);
+#endif
+  }
+
+  struct sigaction* old_sa = nullptr;
+  if (sig == SIGSEGV) old_sa = &g_old_sigaction_segv;
+  else if (sig == SIGBUS) old_sa = &g_old_sigaction_bus;
+  else if (sig == SIGILL) old_sa = &g_old_sigaction_ill;
+  else if (sig == SIGFPE) old_sa = &g_old_sigaction_fpe;
+
+  if (old_sa && old_sa->sa_sigaction && old_sa->sa_sigaction != FatalSignalHandler) {
+    old_sa->sa_sigaction(sig, info, context);
+  } else {
+    signal(sig, SIG_DFL);
+    raise(sig);
+  }
+}
+
+static void InstallCrashSignalHandler() {
+  struct sigaction sa{};
+  sa.sa_sigaction = FatalSignalHandler;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  sigemptyset(&sa.sa_mask);
+
+  sigaction(SIGSEGV, &sa, &g_old_sigaction_segv);
+  sigaction(SIGBUS, &sa, &g_old_sigaction_bus);
+  sigaction(SIGILL, &sa, &g_old_sigaction_ill);
+  sigaction(SIGFPE, &sa, &g_old_sigaction_fpe);
+  LOGI("Crash signal handlers installed successfully.");
+}
+
 static JNIEnv* GetEnv() {
   if (!g_jvm) return nullptr;
   JNIEnv* env = nullptr;
@@ -43,6 +108,7 @@ static JNIEnv* GetEnv() {
 }
 
 void InitializeJni() {
+  InstallCrashSignalHandler();
   LOGI("Downpour Android JNI Initialized");
 }
 
@@ -186,6 +252,17 @@ bool DownloadFileViaJava(const std::string& url, const std::string& destination,
   return true;
 }
 
+void SetDriverConfig(const std::string& driver_dir, const std::string& driver_name,
+                     const std::string& hook_lib_dir, bool use_turnip, bool enable_turbo) {
+  downpour::driver::DriverConfig cfg;
+  cfg.driver_dir = driver_dir;
+  cfg.driver_name = driver_name;
+  cfg.hook_lib_dir = hook_lib_dir;
+  cfg.use_turnip = use_turnip;
+  cfg.enable_turbo = enable_turbo;
+  downpour::driver::SetDriverConfig(cfg);
+}
+
 }  // namespace downpour::android
 
 // --- JNI Exported Functions called by DownpourActivity ---
@@ -196,6 +273,40 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
   downpour::android::g_jvm = vm;
   LOGI("JNI_OnLoad called for Downpour");
   return JNI_VERSION_1_6;
+}
+
+JNIEXPORT void JNICALL
+Java_com_downpour_DownpourActivity_nativeSetDriverConfig(
+    JNIEnv* env, jobject /*thiz*/,
+    jstring driverDir, jstring driverName, jstring hookLibDir,
+    jboolean useTurnip, jboolean enableTurbo) {
+  std::string dir_str;
+  std::string name_str;
+  std::string hook_str;
+
+  if (driverDir) {
+    const char* c_dir = env->GetStringUTFChars(driverDir, nullptr);
+    if (c_dir) {
+      dir_str = c_dir;
+      env->ReleaseStringUTFChars(driverDir, c_dir);
+    }
+  }
+  if (driverName) {
+    const char* c_name = env->GetStringUTFChars(driverName, nullptr);
+    if (c_name) {
+      name_str = c_name;
+      env->ReleaseStringUTFChars(driverName, c_name);
+    }
+  }
+  if (hookLibDir) {
+    const char* c_hook = env->GetStringUTFChars(hookLibDir, nullptr);
+    if (c_hook) {
+      hook_str = c_hook;
+      env->ReleaseStringUTFChars(hookLibDir, c_hook);
+    }
+  }
+
+  downpour::android::SetDriverConfig(dir_str, name_str, hook_str, useTurnip, enableTurbo);
 }
 
 JNIEXPORT void JNICALL

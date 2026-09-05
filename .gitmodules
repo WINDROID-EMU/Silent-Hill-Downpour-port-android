@@ -1,0 +1,3 @@
+[submodule "src/android/libadrenotools"]
+	path = src/android/libadrenotools
+	url = https://github.com/bylaws/libadrenotools.git

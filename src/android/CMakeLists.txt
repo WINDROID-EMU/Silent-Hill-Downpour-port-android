@@ -32,11 +32,19 @@ add_compile_definitions(
 
 find_package(rexglue 0.10.0 REQUIRED CONFIG)
 
+if(NOT DEFINED CMAKE_ANDROID_ARCH_ABI AND DEFINED ANDROID_ABI)
+    set(CMAKE_ANDROID_ARCH_ABI ${ANDROID_ABI})
+endif()
+
+# AdrenoTools library for loading Turnip and custom GPU drivers
+add_subdirectory(libadrenotools)
+
 # Include generated recompiled sources
 include("${ROOT_DIR}/generated/default/sources.cmake")
 
 set(DOWNPOUR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/downpour_android.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/downpour_driver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/downpour_main_android.cpp
     ${SRC_DIR}/main.cpp
     ${SRC_DIR}/sha256.cpp
@@ -52,6 +60,7 @@ target_include_directories(downpour PRIVATE
     ${ROOT_DIR}
     ${SRC_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/libadrenotools/include
     ${ROOT_DIR}/generated/default
     ${REXGLUE_SDK_DIR}/share/rexglue
 )
@@ -60,4 +69,12 @@ target_link_libraries(downpour PRIVATE
     rex::runtime
     android
     log
+    adrenotools
+)
+
+add_dependencies(downpour
+    main_hook
+    hook_impl
+    file_redirect_hook
+    gsl_alloc_hook
 )
