@@ -56,18 +56,26 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Prepare APK Release Artifact
+      - name: Prepare APK Release Artifacts
+        id: release_info
         run: |
           mkdir -p release-assets
           cp src/android/app/build/outputs/apk/debug/app-debug.apk release-assets/Silent-Hill-Downpour-Android-debug.apk
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "title=Silent Hill: Downpour Android Port ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "title=Silent Hill: Downpour Android Port (Latest Build)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Publish GitHub Release
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/Silent-Hill-Downpour-Android-debug.apk
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Silent Hill: Downpour Android Port {0}', github.ref_name) || 'Silent Hill: Downpour Android Port (Latest Build)' }}
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: ${{ steps.release_info.outputs.title }}
           body: |
             ### 🎮 Silent Hill: Downpour - Android Port
             
