@@ -1,6 +1,7 @@
 package com.downpour;
 
 import android.app.Activity;
+import androidx.appcompat.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -74,6 +75,17 @@ public class TitleActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         hideSystemUi();
+
+        // Migrate old configurations and check if Turnip crashed during previous attempt
+        GameConfigManager.ensureDriverPreferencesMigrated(this);
+        if (GameConfigManager.checkAndRecoverTurnipCrash(this)) {
+            new AlertDialog.Builder(this)
+                .setTitle("Recuperação de Inicialização")
+                .setMessage("O jogo foi fechado pelo sistema devido a uma falha do driver Turnip (incompatibilidade / Device Lost no Android 15).\n\nO Driver Padrão do Sistema Qualcomm foi ativado automaticamente para garantir total estabilidade. Você já pode iniciar o jogo!")
+                .setPositiveButton("OK", null)
+                .show();
+        }
+
         updateUiState();
         MenuMusicManager.getInstance().onActivityResumed(this);
         if (fadeOverlay != null && fadeOverlay.getVisibility() == View.VISIBLE) {
@@ -281,6 +293,10 @@ public class TitleActivity extends AppCompatActivity {
         if (btnSettings != null) {
             btnSettings.setEnabled(false);
         }
+
+        // Track whether Turnip was active for crash recovery
+        boolean turnipRequested = GameConfigManager.isTurnipEnabled(this) && GameConfigManager.hasCustomDriverInstalled(this);
+        GameConfigManager.markTurnipLaunchInProgress(this, turnipRequested);
 
         // Fades out music volume smoothly over 1400ms in sync with the screen fade transition
         MenuMusicManager.getInstance().fadeOutAndStop(1400, null);

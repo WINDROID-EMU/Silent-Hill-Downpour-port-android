@@ -99,7 +99,7 @@ public class SettingsActivity extends AppCompatActivity {
         switchUseTurnip.setOnCheckedChangeListener((buttonView, isChecked) -> {
             GameConfigManager.setTurnipEnabled(this, isChecked);
             updateDriverStatusText();
-            String msg = isChecked ? "Driver Turnip ativado para o próximo início!" : "Driver do Sistema Qualcomm ativado!";
+            String msg = isChecked ? "Driver Turnip ativado! (Experimental no Android 15)" : "Driver do Sistema Qualcomm ativado (Estável)!";
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
         });
 
@@ -111,6 +111,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         btnResetSystemDriver.setOnClickListener(v -> {
             GameConfigManager.setTurnipEnabled(this, false);
+            GameConfigManager.markTurnipLaunchInProgress(this, false);
             switchUseTurnip.setChecked(false);
             updateDriverStatusText();
             Toast.makeText(this, "Driver do Sistema (Qualcomm OEM) definido como padrão.", Toast.LENGTH_SHORT).show();

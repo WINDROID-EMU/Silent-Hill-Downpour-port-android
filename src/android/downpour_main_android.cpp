@@ -67,8 +67,7 @@ int RunWindowedApp(int argc, char** argv) {
   rex::cvar::SetFlagByName("anisotropic_override", "2");
   rex::cvar::SetFlagByName("readback_memexport", "false");
   rex::cvar::SetFlagByName("readback_memexport_fast", "true");
-  rex::cvar::SetFlagByName("vulkan_sparse_shared_memory", "false");
-  rex::cvar::SetFlagByName("vulkan_submit_on_primary_buffer_end", "true");
+  rex::cvar::SetFlagByName("vulkan_submit_on_primary_buffer_end", "false");
   rex::cvar::SetFlagByName("vsync", "true");
 
 #if defined(__ANDROID__)

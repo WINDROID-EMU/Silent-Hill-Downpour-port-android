@@ -33,6 +33,9 @@ public class GameConfigManager {
     public static final String DEFAULT_DRIVER_NAME = "vulkan.adreno.so";
     public static final String EXTRA_ISO_PATH = "EXTRA_ISO_PATH";
 
+    public static final String PREF_TURNIP_IN_FLIGHT = "turnip_in_flight";
+    public static final String PREF_DRIVER_MIGRATED_V2 = "driver_preference_migrated_v2";
+
     public static File getStorageDir(Context context) {
         File ext = context.getExternalFilesDir(null);
         return (ext != null) ? ext : context.getFilesDir();
@@ -61,7 +64,7 @@ public class GameConfigManager {
 
     public static boolean isTurnipEnabled(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        return prefs.getBoolean(PREF_USE_TURNIP, true);
+        return prefs.getBoolean(PREF_USE_TURNIP, false);
     }
 
     public static void setTurnipEnabled(Context context, boolean enabled) {
@@ -69,6 +72,39 @@ public class GameConfigManager {
                .edit()
                .putBoolean(PREF_USE_TURNIP, enabled)
                .apply();
+    }
+
+    public static void ensureDriverPreferencesMigrated(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        if (!prefs.getBoolean(PREF_DRIVER_MIGRATED_V2, false)) {
+            // Revert any previously auto-activated Turnip default to system driver
+            prefs.edit()
+                 .putBoolean(PREF_USE_TURNIP, false)
+                 .putBoolean(PREF_TURNIP_IN_FLIGHT, false)
+                 .putBoolean(PREF_DRIVER_MIGRATED_V2, true)
+                 .apply();
+            Log.i(TAG, "Migrated driver preference to Qualcomm System Driver default");
+        }
+    }
+
+    public static void markTurnipLaunchInProgress(Context context, boolean inProgress) {
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+               .edit()
+               .putBoolean(PREF_TURNIP_IN_FLIGHT, inProgress)
+               .apply();
+    }
+
+    public static boolean checkAndRecoverTurnipCrash(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_TURNIP_IN_FLIGHT, false)) {
+            Log.w(TAG, "Detected previous launch crashed with Turnip driver! Falling back to Qualcomm System Driver.");
+            prefs.edit()
+                 .putBoolean(PREF_USE_TURNIP, false)
+                 .putBoolean(PREF_TURNIP_IN_FLIGHT, false)
+                 .apply();
+            return true;
+        }
+        return false;
     }
 
     public static boolean isTurboEnabled(Context context) {

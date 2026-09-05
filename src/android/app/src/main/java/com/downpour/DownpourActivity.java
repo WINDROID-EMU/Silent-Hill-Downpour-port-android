@@ -159,8 +159,14 @@ public class DownpourActivity extends SDLActivity {
     }
 
     private void initDriverConfiguration() {
+        GameConfigManager.ensureDriverPreferencesMigrated(this);
+        boolean recovered = GameConfigManager.checkAndRecoverTurnipCrash(this);
+        if (recovered) {
+            runOnUiThread(() -> Toast.makeText(this, "Driver Turnip falhou no Android 15. Alternado para o Driver do Sistema Qualcomm.", Toast.LENGTH_LONG).show());
+        }
+
         SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        boolean useTurnip = prefs.getBoolean(PREF_USE_TURNIP, true);
+        boolean useTurnip = prefs.getBoolean(PREF_USE_TURNIP, false);
         boolean turbo = prefs.getBoolean(PREF_TURBO, true);
         String driverName = prefs.getString(PREF_DRIVER_NAME, "vulkan.adreno.so");
 
@@ -181,11 +187,28 @@ public class DownpourActivity extends SDLActivity {
         boolean hasCustomDriver = driverFile.exists();
         if (useTurnip && hasCustomDriver) {
             Log.i(TAG, "Configuring AdrenoTools Turnip driver: dir=" + customDriverDir.getAbsolutePath() + ", name=" + driverName);
+            GameConfigManager.markTurnipLaunchInProgress(this, true);
             nativeSetDriverConfig(customDriverDir.getAbsolutePath(), driverName, hookLibDir, true, turbo);
         } else {
             Log.i(TAG, "Configuring System Vulkan driver (Turnip active=" + (useTurnip && hasCustomDriver) + ")");
+            GameConfigManager.markTurnipLaunchInProgress(this, false);
             nativeSetDriverConfig("", "", hookLibDir, false, false);
         }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            // Emulation and window are rendering; clear crash guard flag
+            GameConfigManager.markTurnipLaunchInProgress(this, false);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        GameConfigManager.markTurnipLaunchInProgress(this, false);
+        super.onDestroy();
     }
 
     @Override
@@ -230,7 +253,7 @@ public class DownpourActivity extends SDLActivity {
     public void showDriverSelectionDialog() {
         runOnUiThread(() -> {
             SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-            boolean currentUseTurnip = prefs.getBoolean(PREF_USE_TURNIP, true);
+            boolean currentUseTurnip = prefs.getBoolean(PREF_USE_TURNIP, false);
             String currentDriver = prefs.getString(PREF_DRIVER_NAME, "vulkan.adreno.so");
             File customDriverDir = new File(getFilesDir(), "custom_driver");
             boolean hasTurnip = new File(customDriverDir, currentDriver).exists();
