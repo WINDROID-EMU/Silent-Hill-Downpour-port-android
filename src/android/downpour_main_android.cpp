@@ -73,6 +73,7 @@ int RunWindowedApp(int argc, char** argv) {
 #if defined(__ANDROID__)
   // Initialize Turnip / custom AdrenoTools driver before SDL3/Vulkan initialization
   downpour::driver::InitializeDriver();
+  downpour::driver::LogTextureCompressionSupport();
 #endif
 
   int result = EXIT_FAILURE;

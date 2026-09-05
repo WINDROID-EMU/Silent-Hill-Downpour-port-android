@@ -22,11 +22,13 @@ android {
             cmake {
                 cppFlags "-std=c++23", "-fexceptions", "-frtti",
                          "-O3", "-fvectorize", "-fslp-vectorize",
-                         "-funroll-loops", "-fno-semantic-interposition"
+                         "-funroll-loops", "-fno-semantic-interposition",
+                         "-flto=thin", "-DNDEBUG"
                 arguments "-DANDROID_STL=c++_shared",
                           "-DANDROID_PLATFORM=android-26",
                           "-DDPOUR_NO_NATIVE_RENDER=1",
-                          "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-O3 -Wl,--gc-sections -Wl,--hash-style=gnu -Wl,-Bsymbolic-functions -Wl,-z,max-page-size=16384"
+                          "-DCMAKE_BUILD_TYPE=Release",
+                          "-DCMAKE_SHARED_LINKER_FLAGS=-flto=thin -Wl,-O3 -Wl,--gc-sections -Wl,--icf=all -Wl,--hash-style=gnu -Wl,-Bsymbolic-functions -Wl,-z,max-page-size=16384"
             }
         }
     }

@@ -4,6 +4,8 @@
 
 #include <adrenotools/driver.h>
 #include <SDL3/SDL.h>
+#include <vulkan/vulkan.h>
+#include <vector>
 #include <dlfcn.h>
 #include <link.h>
 #include <sys/mman.h>
@@ -245,6 +247,106 @@ void ShutdownDriver() {
   }
 }
 
+void LogTextureCompressionSupport() {
+  // Diagnostic only: creates a throwaway VkInstance against whichever driver is
+  // currently active (Turnip or system) and logs whether the GPU/driver reports
+  // support for BC (DXT), ETC2 and ASTC texture compression.
+  void* vk_lib = dlopen("libvulkan.so", RTLD_NOW);
+  if (!vk_lib) {
+    __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "Failed to dlopen libvulkan.so for caps check: %s", dlerror());
+    return;
+  }
+
+  auto pfn_vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(vk_lib, "vkGetInstanceProcAddr"));
+  if (!pfn_vkGetInstanceProcAddr) {
+    __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "Failed to dlsym vkGetInstanceProcAddr");
+    dlclose(vk_lib);
+    return;
+  }
+
+  auto pfn_vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(pfn_vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
+  if (!pfn_vkCreateInstance) {
+    __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "Failed to resolve vkCreateInstance");
+    dlclose(vk_lib);
+    return;
+  }
+
+  VkApplicationInfo app_info{};
+  app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+  app_info.pApplicationName = "DownpourGpuCaps";
+  app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+  app_info.pEngineName = "None";
+  app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+  app_info.apiVersion = VK_API_VERSION_1_0;
+
+  VkInstanceCreateInfo inst_info{};
+  inst_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+  inst_info.pApplicationInfo = &app_info;
+
+  VkInstance instance = VK_NULL_HANDLE;
+  VkResult res = pfn_vkCreateInstance(&inst_info, nullptr, &instance);
+  if (res != VK_SUCCESS || instance == VK_NULL_HANDLE) {
+    __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "vkCreateInstance failed: %d", res);
+    dlclose(vk_lib);
+    return;
+  }
+
+  auto pfn_vkEnumeratePhysicalDevices = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(pfn_vkGetInstanceProcAddr(instance, "vkEnumeratePhysicalDevices"));
+  auto pfn_vkGetPhysicalDeviceProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(pfn_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceProperties"));
+  auto pfn_vkGetPhysicalDeviceFeatures = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures>(pfn_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceFeatures"));
+  auto pfn_vkDestroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(pfn_vkGetInstanceProcAddr(instance, "vkDestroyInstance"));
+
+  if (pfn_vkEnumeratePhysicalDevices && pfn_vkGetPhysicalDeviceProperties && pfn_vkGetPhysicalDeviceFeatures) {
+    uint32_t device_count = 0;
+    pfn_vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+    if (device_count > 0) {
+      std::vector<VkPhysicalDevice> devices(device_count);
+      pfn_vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+
+      for (uint32_t i = 0; i < device_count; ++i) {
+        VkPhysicalDeviceProperties props{};
+        pfn_vkGetPhysicalDeviceProperties(devices[i], &props);
+
+        VkPhysicalDeviceFeatures features{};
+        pfn_vkGetPhysicalDeviceFeatures(devices[i], &features);
+
+        __android_log_print(ANDROID_LOG_INFO, "DownpourGpuCaps",
+                            "=== GPU Device %u: %s (Driver Version: 0x%x, API: %u.%u.%u) ===",
+                            i, props.deviceName, props.driverVersion,
+                            VK_VERSION_MAJOR(props.apiVersion),
+                            VK_VERSION_MINOR(props.apiVersion),
+                            VK_VERSION_PATCH(props.apiVersion));
+        __android_log_print(ANDROID_LOG_INFO, "DownpourGpuCaps",
+                            "  textureCompressionBC (DXT1/3/5): %s",
+                            features.textureCompressionBC ? "SUPPORTED (1)" : "NOT SUPPORTED (0)");
+        __android_log_print(ANDROID_LOG_INFO, "DownpourGpuCaps",
+                            "  textureCompressionETC2: %s",
+                            features.textureCompressionETC2 ? "SUPPORTED (1)" : "NOT SUPPORTED (0)");
+        __android_log_print(ANDROID_LOG_INFO, "DownpourGpuCaps",
+                            "  textureCompressionASTC_LDR: %s",
+                            features.textureCompressionASTC_LDR ? "SUPPORTED (1)" : "NOT SUPPORTED (0)");
+
+        if (!features.textureCompressionBC) {
+          __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps",
+                              "CRITICAL WARNING: Driver does NOT support BC texture compression! "
+                              "Xbox 360 assets rely on BC1/BC2/BC3 (DXT1/3/5). "
+                              "This is a prime candidate for white/missing textures!");
+        } else {
+          __android_log_print(ANDROID_LOG_INFO, "DownpourGpuCaps",
+                              "SUCCESS: Driver reports native hardware support for BC texture compression.");
+        }
+      }
+    } else {
+      __android_log_print(ANDROID_LOG_WARN, "DownpourGpuCaps", "No physical devices found.");
+    }
+  }
+
+  if (pfn_vkDestroyInstance) {
+    pfn_vkDestroyInstance(instance, nullptr);
+  }
+  dlclose(vk_lib);
+}
+
 }  // namespace downpour::driver
 
 #else
@@ -256,6 +358,7 @@ const DriverConfig& GetDriverConfig() { static DriverConfig cfg; return cfg; }
 bool InitializeDriver() { return false; }
 bool IsTurnipActive() { return false; }
 void ShutdownDriver() {}
+void LogTextureCompressionSupport() {}
 
 }  // namespace downpour::driver
 

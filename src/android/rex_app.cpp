@@ -124,7 +124,13 @@ static void* PerformanceThreadWrapper(void* arg) {
   void* real_arg = t_arg->real_arg;
   delete t_arg;
 
-  ConfigurePerformanceThread();
+  // Do NOT call ConfigurePerformanceThread() here for worker/streaming/audio threads.
+  // Pinning ALL threads to the big/prime cores with nice -10 causes them to fight
+  // for the same cores, starves background texture streaming (causing white textures),
+  // leaves LITTLE cores completely idle, and triggers severe thermal throttling.
+  // The Android Linux scheduler with EAS (Energy Aware Scheduling) manages
+  // thread distribution across big.LITTLE cores automatically.
+  // ConfigurePerformanceThread() is only called once for the main thread in InitBionicPthreadFix.
 
   return real_start(real_arg);
 }

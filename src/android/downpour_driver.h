@@ -27,4 +27,10 @@ bool IsTurnipActive();
 // Cleanup on shutdown
 void ShutdownDriver();
 
+// Diagnostic only: creates a throwaway VkInstance against whichever driver is
+// currently active (Turnip or system) and logs to logcat (tag "DownpourGpuCaps")
+// whether the GPU/driver reports support for BC (DXT), ETC2 and ASTC texture
+// compression. Does not affect rendering.
+void LogTextureCompressionSupport();
+
 }  // namespace downpour::driver

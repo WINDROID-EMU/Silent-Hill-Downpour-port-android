@@ -110,13 +110,20 @@ public class DownpourActivity extends SDLActivity {
             }
         }
 
-        // Lock display to the highest supported refresh rate (e.g. 120Hz / 90Hz)
+        // Lock display to the highest supported refresh rate (e.g. 120Hz / 90Hz) without changing resolution
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Display display = getDisplay();
             if (display != null) {
+                Display.Mode currentMode = display.getMode();
                 Display.Mode[] modes = display.getSupportedModes();
                 Display.Mode bestMode = null;
                 for (Display.Mode m : modes) {
+                    if (currentMode != null) {
+                        if (m.getPhysicalWidth() != currentMode.getPhysicalWidth() ||
+                            m.getPhysicalHeight() != currentMode.getPhysicalHeight()) {
+                            continue;
+                        }
+                    }
                     if (bestMode == null || m.getRefreshRate() > bestMode.getRefreshRate()) {
                         bestMode = m;
                     }
@@ -125,7 +132,7 @@ public class DownpourActivity extends SDLActivity {
                     WindowManager.LayoutParams lp = getWindow().getAttributes();
                     lp.preferredDisplayModeId = bestMode.getModeId();
                     getWindow().setAttributes(lp);
-                    Log.i(TAG, "Locked display refresh rate to " + bestMode.getRefreshRate() + "Hz (mode " + bestMode.getModeId() + ")");
+                    Log.i(TAG, "Locked display refresh rate to " + bestMode.getRefreshRate() + "Hz (mode " + bestMode.getModeId() + ") preserving resolution");
                 }
             }
         }
