@@ -10,6 +10,7 @@
 #include <string_view>
 #include <unordered_set>
 #include <vector>
+#include <thread>
 
 #include <rex/logging.h>
 #if !defined(__ANDROID__)
@@ -453,9 +454,59 @@ void ShowIsoInstallWizard(rex::ui::ImGuiDrawer* drawer, rex::PathConfig runtime_
       });
 #else
   (void)drawer;
-  if (complete) {
-    complete(std::move(runtime_paths));
-  }
+  std::thread([runtime_paths = std::move(runtime_paths), complete = std::move(complete)]() mutable {
+    const auto game_root = runtime_paths.game_data_root;
+    REXLOG_INFO("Android: Prompting user for Silent Hill: Downpour ISO via SAF...");
+
+    auto iso_path = PickIsoFile();
+    if (iso_path.empty()) {
+      REXLOG_ERROR("Android: No ISO file selected or selection cancelled.");
+      return;
+    }
+
+    std::atomic<uint64_t> copied_bytes{0};
+    std::atomic<uint64_t> total_bytes{0};
+    std::string error;
+    REXLOG_INFO("Android: Extracting game data from {} to {}...", iso_path.string(), game_root.string());
+
+    if (!InstallGameDataFromIso(iso_path, game_root, &copied_bytes, &total_bytes, error)) {
+      REXLOG_ERROR("Android: ISO game data installation failed: {}", error);
+      return;
+    }
+
+    if (!IsGameDataInstalled(game_root)) {
+      REXLOG_ERROR("Android: Game data could not be verified after extraction.");
+      return;
+    }
+
+    REXLOG_INFO("Android: Game data extracted and verified successfully!");
+
+    // Best-effort auto-stage Title Update 1
+    if (!IsTitleUpdateInstalled(game_root)) {
+      std::string tu_error;
+      REXLOG_INFO("Android: Attempting automatic Title Update 1 download/staging...");
+      if (!TryDownloadAndStageTitleUpdate(game_root, tu_error)) {
+        REXLOG_WARN("Android: TU1 auto-download failed: {}. Prompting user for TU package...", tu_error);
+        auto tu_path = downpour::android::ConsumePendingTuPath();
+        if (!tu_path.empty()) {
+          StageTitleUpdateFromFile(tu_path, game_root, tu_error);
+        }
+      }
+    }
+
+    // Clean up cached ISO if it was copied to cache to free storage
+    std::error_code rm_ec;
+    if (iso_path.string().find("/cache/") != std::string::npos) {
+      std::filesystem::remove(iso_path, rm_ec);
+    }
+
+    if (IsGameDataInstalled(game_root) && IsTitleUpdateInstalled(game_root)) {
+      REXLOG_INFO("Android: Setup completed! Restarting application to boot game...");
+      RelaunchSelfOrResume(std::move(runtime_paths), std::move(complete));
+    } else if (complete) {
+      complete(std::move(runtime_paths));
+    }
+  }).detach();
 #endif
 }
 

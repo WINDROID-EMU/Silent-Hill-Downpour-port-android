@@ -28420,8 +28420,7 @@ loc_82FE7938:
 	// cmpwi r3,0
 	ctx.cr0.compare<int32_t>(ctx.r3.s32, 0, ctx.xer);
 	// bne 0x82fe7908
-	// ERROR: conditional branch to unknown address 0x82FE7908
-	if (!ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x82FE796C to 0x82FE7908");
+	if (!ctx.cr0.eq) goto loc_82FE7908;
 	// b 0x82fe797c
 	goto loc_82FE797C;
 loc_82FE7974:

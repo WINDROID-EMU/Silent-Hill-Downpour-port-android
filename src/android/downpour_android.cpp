@@ -132,10 +132,16 @@ void SetExternalFilesDir(const std::string& path) {
 }
 
 std::filesystem::path GetInternalFilesDir() {
+  if (g_internal_files_dir.empty()) {
+    return "/data/data/com.downpour/files";
+  }
   return g_internal_files_dir;
 }
 
 std::filesystem::path GetExternalFilesDir() {
+  if (g_external_files_dir.empty()) {
+    return "/storage/emulated/0/Android/data/com.downpour/files";
+  }
   return g_external_files_dir;
 }
 

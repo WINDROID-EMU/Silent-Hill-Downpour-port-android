@@ -28486,7 +28486,7 @@ loc_82FFB298:
 	ctx.r11.u64 = __builtin_rotateleft64(ctx.r11.u32 | (ctx.r11.u64 << 32), 0) & 0x8000;
 	ctx.cr0.compare<int32_t>(ctx.r11.s32, 0, ctx.xer);
 	// beq 0x82ffb298
-	if (ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x82FFB2E4 to 0x82FFB298");
+	if (ctx.cr0.eq) goto loc_82FFB298;
 	// sth r27,0(r31)
 	REX_STORE_U16(ctx.r31.u32 + 0, ctx.r27.u16);
 	// addi r1,r1,144
@@ -32341,8 +32341,7 @@ loc_8316A70C:
 	// addi r31,r31,1
 	ctx.r31.s64 = ctx.r31.s64 + 1;
 	// bne 0x8316a70c
-	// ERROR: conditional branch to unknown address 0x8316A70C
-	if (!ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x8316A7F8 to 0x8316A70C");
+	if (!ctx.cr0.eq) goto loc_8316A70C;
 loc_8316A7FC:
 	// addic. r22,r22,-1
 	ctx.xer.ca = ctx.r22.u32 > 0;
@@ -32351,8 +32350,7 @@ loc_8316A7FC:
 	// addi r23,r23,36
 	ctx.r23.s64 = ctx.r23.s64 + 36;
 	// bne 0x8316a6e8
-	// ERROR: conditional branch to unknown address 0x8316A6E8
-	if (!ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x8316A804 to 0x8316A6E8");
+	if (!ctx.cr0.eq) goto loc_8316A6E8;
 loc_8316A808:
 	// addi r1,r1,352
 	ctx.r1.s64 = ctx.r1.s64 + 352;

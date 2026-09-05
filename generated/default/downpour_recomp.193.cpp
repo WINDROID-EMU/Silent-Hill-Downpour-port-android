@@ -30744,8 +30744,7 @@ loc_82FF6CE4:
 	// cmpwi cr6,r31,0
 	ctx.cr6.compare<int32_t>(ctx.r31.s32, 0, ctx.xer);
 	// bgt cr6,0x82ff6ce4
-	// ERROR: conditional branch to unknown address 0x82FF6CE4
-	if (ctx.cr6.gt) REX_FATAL("Unresolved branch from 0x82FF6D08 to 0x82FF6CE4");
+	if (ctx.cr6.gt) goto loc_82FF6CE4;
 loc_82FF6D0C:
 	// addi r6,r1,80
 	ctx.r6.s64 = ctx.r1.s64 + 80;

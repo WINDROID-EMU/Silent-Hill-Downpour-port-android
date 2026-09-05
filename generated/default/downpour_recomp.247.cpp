@@ -26019,8 +26019,7 @@ loc_82E9B22C:
 	// cmplwi cr6,r11,5
 	ctx.cr6.compare<uint32_t>(ctx.r11.u32, 5, ctx.xer);
 	// blt cr6,0x82e9ae48
-	// ERROR: conditional branch to unknown address 0x82E9AE48
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x82E9B260 to 0x82E9AE48");
+	if (ctx.cr6.lt) goto loc_82E9AE48;
 	// addi r3,r1,208
 	ctx.r3.s64 = ctx.r1.s64 + 208;
 	// b 0x82e9ae44

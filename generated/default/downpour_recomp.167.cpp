@@ -33595,7 +33595,7 @@ loc_831F7BC0:
 	// cmplwi cr6,r11,0
 	ctx.cr6.compare<uint32_t>(ctx.r11.u32, 0, ctx.xer);
 	// bne cr6,0x831f73d8
-	if (!ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x831F7BC8 to 0x831F73D8");
+	if (!ctx.cr6.eq) goto loc_831F73D8;
 	// addi r1,r31,656
 	ctx.r1.s64 = ctx.r31.s64 + 656;
 	// addi r12,r1,-152

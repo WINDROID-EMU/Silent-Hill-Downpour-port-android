@@ -28918,8 +28918,7 @@ loc_82FF2CD0:
 	ctx.r11.u64 = ctx.r11.u32 & 0x1;
 	ctx.cr0.compare<int32_t>(ctx.r11.s32, 0, ctx.xer);
 	// beq 0x82ff2cb8
-	// ERROR: conditional branch to unknown address 0x82FF2CB8
-	if (ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x82FF2CF8 to 0x82FF2CB8");
+	if (ctx.cr0.eq) goto loc_82FF2CB8;
 	// mr r3,r27
 	ctx.r3.u64 = ctx.r27.u64;
 	// bl 0x82ffb8b0

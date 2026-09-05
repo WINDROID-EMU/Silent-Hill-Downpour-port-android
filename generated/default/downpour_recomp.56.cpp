@@ -22922,8 +22922,7 @@ loc_82D54740:
 	// cmpwi cr6,r31,0
 	ctx.cr6.compare<int32_t>(ctx.r31.s32, 0, ctx.xer);
 	// blt cr6,0x82d54700
-	// ERROR: conditional branch to unknown address 0x82D54700
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x82D54744 to 0x82D54700");
+	if (ctx.cr6.lt) goto loc_82D54700;
 	// cmpwi cr6,r27,0
 	ctx.cr6.compare<int32_t>(ctx.r27.s32, 0, ctx.xer);
 	// beq cr6,0x82d5475c

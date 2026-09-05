@@ -285,8 +285,7 @@ DEFINE_REX_FUNC(sub_8232E020) {
 	// mr r28,r31
 	ctx.r28.u64 = ctx.r31.u64;
 	// beq cr6,0x8232e0ac
-	// ERROR: conditional branch to unknown address 0x8232E0AC
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E094 to 0x8232E0AC");
+	if (ctx.cr6.eq) goto loc_8232E0AC;
 	// lwz r31,52(r31)
 	ctx.r31.u64 = REX_LOAD_U32(ctx.r31.u32 + 52);
 	// bl 0x82324d48
@@ -297,16 +296,14 @@ DEFINE_REX_FUNC(sub_8232E020) {
 	// lwz r31,4260(r29)
 	ctx.r31.u64 = REX_LOAD_U32(ctx.r29.u32 + 4260);
 	// beq cr6,0x8232e0ec
-	// ERROR: conditional branch to unknown address 0x8232E0EC
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E0A8 to 0x8232E0EC");
+	if (ctx.cr6.eq) goto loc_8232E0EC;
 loc_8232E0AC:
 	// li r28,0
 	ctx.r28.s64 = 0;
 	// cmplwi cr6,r31,0
 	ctx.cr6.compare<uint32_t>(ctx.r31.u32, 0, ctx.xer);
 	// beq cr6,0x8232e0ec
-	// ERROR: conditional branch to unknown address 0x8232E0EC
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E0B4 to 0x8232E0EC");
+	if (ctx.cr6.eq) goto loc_8232E0EC;
 	// lwz r24,52(r31)
 	ctx.r24.u64 = REX_LOAD_U32(ctx.r31.u32 + 52);
 	// bl 0x82314060
@@ -315,15 +312,13 @@ loc_8232E0AC:
 	// cmplw cr6,r24,r3
 	ctx.cr6.compare<uint32_t>(ctx.r24.u32, ctx.r3.u32, ctx.xer);
 	// bne cr6,0x8232e0e8
-	// ERROR: conditional branch to unknown address 0x8232E0E8
-	if (!ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E0C4 to 0x8232E0E8");
+	if (!ctx.cr6.eq) goto loc_8232E0E8;
 	// lwz r28,116(r31)
 	ctx.r28.u64 = REX_LOAD_U32(ctx.r31.u32 + 116);
 	// cmplwi cr6,r28,0
 	ctx.cr6.compare<uint32_t>(ctx.r28.u32, 0, ctx.xer);
 	// beq cr6,0x8232e0e4
-	// ERROR: conditional branch to unknown address 0x8232E0E4
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E0D0 to 0x8232E0E4");
+	if (ctx.cr6.eq) goto loc_8232E0E4;
 	// lwz r31,52(r28)
 	ctx.r31.u64 = REX_LOAD_U32(ctx.r28.u32 + 52);
 	// bl 0x82324d48
@@ -332,8 +327,7 @@ loc_8232E0AC:
 	// cmplw cr6,r31,r3
 	ctx.cr6.compare<uint32_t>(ctx.r31.u32, ctx.r3.u32, ctx.xer);
 	// beq cr6,0x8232e0e8
-	// ERROR: conditional branch to unknown address 0x8232E0E8
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E0E0 to 0x8232E0E8");
+	if (ctx.cr6.eq) goto loc_8232E0E8;
 loc_8232E0E4:
 	// li r28,0
 	ctx.r28.s64 = 0;
@@ -350,13 +344,11 @@ loc_8232E0EC:
 	// cmplwi cr6,r3,0
 	ctx.cr6.compare<uint32_t>(ctx.r3.u32, 0, ctx.xer);
 	// beq cr6,0x8232e12c
-	// ERROR: conditional branch to unknown address 0x8232E12C
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E0FC to 0x8232E12C");
+	if (ctx.cr6.eq) goto loc_8232E12C;
 	// cmplwi cr6,r31,0
 	ctx.cr6.compare<uint32_t>(ctx.r31.u32, 0, ctx.xer);
 	// beq cr6,0x8232e12c
-	// ERROR: conditional branch to unknown address 0x8232E12C
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E104 to 0x8232E12C");
+	if (ctx.cr6.eq) goto loc_8232E12C;
 	// ld r11,72(r31)
 	ctx.r11.u64 = REX_LOAD_U64(ctx.r31.u32 + 72);
 	// rlwinm r10,r11,0,26,26
@@ -364,8 +356,7 @@ loc_8232E0EC:
 	// cmpldi cr6,r10,0
 	ctx.cr6.compare<uint64_t>(ctx.r10.u64, 0, ctx.xer);
 	// beq cr6,0x8232e12c
-	// ERROR: conditional branch to unknown address 0x8232E12C
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E114 to 0x8232E12C");
+	if (ctx.cr6.eq) goto loc_8232E12C;
 	// lwz r11,0(r3)
 	ctx.r11.u64 = REX_LOAD_U32(ctx.r3.u32 + 0);
 	// mr r4,r31
@@ -404,8 +395,7 @@ loc_8232E12C:
 	// cmplwi cr6,r25,0
 	ctx.cr6.compare<uint32_t>(ctx.r25.u32, 0, ctx.xer);
 	// beq cr6,0x8232e180
-	// ERROR: conditional branch to unknown address 0x8232E180
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E15C to 0x8232E180");
+	if (ctx.cr6.eq) goto loc_8232E180;
 	// lwz r11,80(r1)
 	ctx.r11.u64 = REX_LOAD_U32(ctx.r1.u32 + 80);
 	// lwz r10,0(r25)
@@ -417,8 +407,7 @@ loc_8232E12C:
 	// or r9,r11,r10
 	ctx.r9.u64 = ctx.r11.u64 | ctx.r10.u64;
 	// bne cr6,0x8232e17c
-	// ERROR: conditional branch to unknown address 0x8232E17C
-	if (!ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x8232E174 to 0x8232E17C");
+	if (!ctx.cr6.eq) goto loc_8232E17C;
 	// andc r9,r10,r11
 	ctx.r9.u64 = ctx.r10.u64 & ~ctx.r11.u64;
 loc_8232E17C:

@@ -15133,8 +15133,7 @@ loc_829F4D08:
 	// cmpwi cr6,r29,0
 	ctx.cr6.compare<int32_t>(ctx.r29.s32, 0, ctx.xer);
 	// bgt cr6,0x829f4c0c
-	// ERROR: conditional branch to unknown address 0x829F4C0C
-	if (ctx.cr6.gt) REX_FATAL("Unresolved branch from 0x829F4D0C to 0x829F4C0C");
+	if (ctx.cr6.gt) goto loc_829F4C0C;
 loc_829F4D10:
 	// cmplwi cr6,r24,0
 	ctx.cr6.compare<uint32_t>(ctx.r24.u32, 0, ctx.xer);

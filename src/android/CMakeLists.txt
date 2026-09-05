@@ -37,11 +37,12 @@ include("${ROOT_DIR}/generated/default/sources.cmake")
 
 set(DOWNPOUR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/downpour_android.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/downpour_main_android.cpp
     ${SRC_DIR}/main.cpp
     ${SRC_DIR}/sha256.cpp
     ${SRC_DIR}/downpour_iso_installer.cpp
     ${SRC_DIR}/downpour_title_update_installer.cpp
-    ${REXGLUE_SDK_DIR}/share/rexglue/rex_app.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_app.cpp
     ${GENERATED_SOURCES}
 )
 
@@ -52,6 +53,7 @@ target_include_directories(downpour PRIVATE
     ${SRC_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${ROOT_DIR}/generated/default
+    ${REXGLUE_SDK_DIR}/share/rexglue
 )
 
 target_link_libraries(downpour PRIVATE

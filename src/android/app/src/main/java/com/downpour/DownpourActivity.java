@@ -10,13 +10,9 @@ import android.os.Environment;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Log;
-import android.view.View;
-import android.view.WindowManager;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AppCompatActivity;
+import org.libsdl.app.SDLActivity;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -24,78 +20,43 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-public class DownpourActivity extends AppCompatActivity {
+public class DownpourActivity extends SDLActivity {
 
     private static final String TAG = "DownpourActivity";
+    private static final int REQUEST_CODE_ISO = 1001;
+    private static final int REQUEST_CODE_TU = 1002;
 
-    static {
-        try {
-            System.loadLibrary("c++_shared");
-        } catch (UnsatisfiedLinkError e) {
-            Log.w(TAG, "c++_shared not found as separate lib, may be bundled: " + e.getMessage());
-        }
-        try {
-            System.loadLibrary("rexruntimerd");
-            Log.i(TAG, "librexruntimerd.so loaded successfully");
-        } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "Failed to load librexruntimerd.so: " + e.getMessage());
-        }
-        try {
-            System.loadLibrary("rexgpu-xenosrd");
-            Log.i(TAG, "librexgpu-xenosrd.so loaded successfully");
-        } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "Failed to load librexgpu-xenosrd.so: " + e.getMessage());
-        }
-        try {
-            System.loadLibrary("downpour");
-            Log.i(TAG, "libdownpour.so loaded successfully");
-        } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "Failed to load libdownpour.so: " + e.getMessage());
-        }
-    }
-
-    // Native callbacks
+    // Native callbacks for Android bridge
     private native void nativeInit(String internalDir, String externalDir);
     private static native void nativeOnIsoPicked(String path);
     private static native void nativeOnTuFilePicked(String path);
 
-    private ActivityResultLauncher<Intent> isoPickerLauncher;
-    private ActivityResultLauncher<Intent> tuPickerLauncher;
+    @Override
+    protected String[] getLibraries() {
+        return new String[] {
+            "c++_shared",
+            "rexruntimerd",
+            "rexgpu-xenosrd",
+            "downpour"
+        };
+    }
+
+    @Override
+    protected String getMainFunction() {
+        return "SDL_main";
+    }
+
+    @Override
+    protected String getMainSharedObject() {
+        return getApplicationInfo().nativeLibraryDir + "/libdownpour.so";
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Keep screen on and hide navigation / status bar for immersive experience
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        hideSystemUI();
-
-        // Initialize ActivityResultLaunchers for SAF
-        isoPickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        Uri uri = result.getData().getData();
-                        handlePickedFile(uri, true);
-                    } else {
-                        Log.i(TAG, "ISO file picking cancelled");
-                        nativeOnIsoPicked(null);
-                    }
-                }
-        );
-
-        tuPickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        Uri uri = result.getData().getData();
-                        handlePickedFile(uri, false);
-                    } else {
-                        Log.i(TAG, "TU file picking cancelled");
-                        nativeOnTuFilePicked(null);
-                    }
-                }
-        );
+        // Force landscape orientation
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         // Check storage permissions
         checkStoragePermissions();
@@ -110,26 +71,6 @@ public class DownpourActivity extends AppCompatActivity {
             nativeInit(internalDir, externalDir);
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "nativeInit unsatisfied: " + e.getMessage());
-        }
-    }
-
-    private void hideSystemUI() {
-        View decorView = getWindow().getDecorView();
-        decorView.setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN
-        );
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) {
-            hideSystemUI();
         }
     }
 
@@ -159,7 +100,7 @@ public class DownpourActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
-            isoPickerLauncher.launch(intent);
+            startActivityForResult(intent, REQUEST_CODE_ISO);
         });
     }
 
@@ -172,8 +113,28 @@ public class DownpourActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
-            tuPickerLauncher.launch(intent);
+            startActivityForResult(intent, REQUEST_CODE_TU);
         });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_ISO) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                handlePickedFile(data.getData(), true);
+            } else {
+                Log.i(TAG, "ISO file picking cancelled");
+                nativeOnIsoPicked(null);
+            }
+        } else if (requestCode == REQUEST_CODE_TU) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                handlePickedFile(data.getData(), false);
+            } else {
+                Log.i(TAG, "TU file picking cancelled");
+                nativeOnTuFilePicked(null);
+            }
+        }
     }
 
     /**
@@ -217,8 +178,12 @@ public class DownpourActivity extends AppCompatActivity {
 
                 String resolvedPath = cacheTarget.getAbsolutePath();
                 Log.i(TAG, "File ready for native access at: " + resolvedPath);
-                if (isIso) nativeOnIsoPicked(resolvedPath);
-                else nativeOnTuFilePicked(resolvedPath);
+                if (isIso) {
+                    runOnUiThread(() -> Toast.makeText(this, "Extraindo arquivos do jogo... Aguarde alguns instantes.", Toast.LENGTH_LONG).show());
+                    nativeOnIsoPicked(resolvedPath);
+                } else {
+                    nativeOnTuFilePicked(resolvedPath);
+                }
 
             } catch (Exception e) {
                 Log.e(TAG, "Failed to resolve picked file: " + e.getMessage(), e);
@@ -230,15 +195,16 @@ public class DownpourActivity extends AppCompatActivity {
 
     private String getFileName(Uri uri) {
         String result = null;
-        if ("content".equals(uri.getScheme())) {
+        if (uri.getScheme() != null && uri.getScheme().equals("content")) {
             try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
                 if (cursor != null && cursor.moveToFirst()) {
-                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                    if (nameIndex >= 0) {
-                        result = cursor.getString(nameIndex);
+                    int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (index >= 0) {
+                        result = cursor.getString(index);
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         if (result == null) {
             result = uri.getPath();
@@ -256,6 +222,7 @@ public class DownpourActivity extends AppCompatActivity {
      * Called from C++ to download TU1 container over HTTP
      */
     public boolean downloadFile(String urlStr, String destPath) {
+        runOnUiThread(() -> Toast.makeText(this, "Baixando atualização do jogo (TU1)...", Toast.LENGTH_SHORT).show());
         try {
             Log.i(TAG, "Starting HTTP download: " + urlStr + " -> " + destPath);
             URL url = new URL(urlStr);
@@ -301,10 +268,12 @@ public class DownpourActivity extends AppCompatActivity {
      */
     public void restartActivity() {
         runOnUiThread(() -> {
-            Log.i(TAG, "Restarting Downpour Activity");
-            Intent intent = getIntent();
-            finish();
+            Log.i(TAG, "Restarting Downpour Activity cleanly");
+            Toast.makeText(this, "Iniciando Silent Hill: Downpour...", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(this, DownpourActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
+            Runtime.getRuntime().exit(0);
         });
     }
 }

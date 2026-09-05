@@ -647,10 +647,14 @@ bool DownloadAndStageTitleUpdate(const std::filesystem::path& game_root,
   total_bytes.store(kContainerSize, std::memory_order_relaxed);
 
   std::error_code ec;
+#if defined(__ANDROID__)
+  auto temp_dir = game_root;
+#else
   auto temp_dir = std::filesystem::temp_directory_path(ec);
   if (ec) {
     temp_dir = game_root;
   }
+#endif
   const auto temp_file = temp_dir / "downpour_title_update_download.tmp";
 
   const std::string url = REXCVAR_GET(downpour_title_update_url);
@@ -859,9 +863,26 @@ void ShowTitleUpdateInstallWizard(rex::ui::ImGuiDrawer* drawer, rex::PathConfig 
       });
 #else
   (void)drawer;
-  if (complete) {
-    complete(std::move(runtime_paths));
-  }
+  std::thread([runtime_paths = std::move(runtime_paths), complete = std::move(complete)]() mutable {
+    const auto game_root = runtime_paths.game_data_root;
+    if (!IsTitleUpdateInstalled(game_root)) {
+      std::string tu_error;
+      REXLOG_INFO("Android: Attempting automatic Title Update 1 download/staging...");
+      if (!TryDownloadAndStageTitleUpdate(game_root, tu_error)) {
+        REXLOG_WARN("Android: Title update download failed: {}. Prompting for TU file...", tu_error);
+        auto tu_path = PickTitleUpdateFile();
+        if (!tu_path.empty()) {
+          StageTitleUpdateFromFile(tu_path, game_root, tu_error);
+        }
+      }
+    }
+    if (IsTitleUpdateInstalled(game_root)) {
+      REXLOG_INFO("Android: Title Update 1 installed successfully! Restarting to boot game...");
+      RelaunchSelfOrResume(std::move(runtime_paths), std::move(complete));
+    } else if (complete) {
+      complete(std::move(runtime_paths));
+    }
+  }).detach();
 #endif
 }
 

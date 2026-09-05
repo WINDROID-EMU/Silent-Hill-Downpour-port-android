@@ -16787,8 +16787,7 @@ loc_82A772F8:
 	// cmpw cr6,r28,r3
 	ctx.cr6.compare<int32_t>(ctx.r28.s32, ctx.r3.s32, ctx.xer);
 	// blt cr6,0x82a76ffc
-	// ERROR: conditional branch to unknown address 0x82A76FFC
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x82A77330 to 0x82A76FFC");
+	if (ctx.cr6.lt) goto loc_82A76FFC;
 loc_82A77334:
 	// lwz r11,0(r20)
 	ctx.r11.u64 = REX_LOAD_U32(ctx.r20.u32 + 0);
@@ -28620,8 +28619,7 @@ loc_82FFC56C:
 	// cmplwi cr6,r30,0
 	ctx.cr6.compare<uint32_t>(ctx.r30.u32, 0, ctx.xer);
 	// beq cr6,0x82ffc508
-	// ERROR: conditional branch to unknown address 0x82FFC508
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x82FFC570 to 0x82FFC508");
+	if (ctx.cr6.eq) goto loc_82FFC508;
 loc_82FFC574:
 	// bl 0x82fe92c0
 	ctx.lr = 0x82FFC578;

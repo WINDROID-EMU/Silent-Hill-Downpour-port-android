@@ -24167,8 +24167,7 @@ loc_82DAC2BC:
 	// cmpw cr6,r26,r8
 	ctx.cr6.compare<int32_t>(ctx.r26.s32, ctx.r8.s32, ctx.xer);
 	// blt cr6,0x82dac2bc
-	// ERROR: conditional branch to unknown address 0x82DAC2BC
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x82DAC320 to 0x82DAC2BC");
+	if (ctx.cr6.lt) goto loc_82DAC2BC;
 loc_82DAC324:
 	// lwz r11,0(r27)
 	ctx.r11.u64 = REX_LOAD_U32(ctx.r27.u32 + 0);
@@ -24220,8 +24219,7 @@ loc_82DAC360:
 	// cmplwi cr6,r3,0
 	ctx.cr6.compare<uint32_t>(ctx.r3.u32, 0, ctx.xer);
 	// beq cr6,0x82dabd60
-	// ERROR: conditional branch to unknown address 0x82DABD60
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x82DAC37C to 0x82DABD60");
+	if (ctx.cr6.eq) goto loc_82DABD60;
 	// lhz r11,34(r28)
 	ctx.r11.u64 = REX_LOAD_U16(ctx.r28.u32 + 34);
 	// li r4,0
@@ -28491,14 +28489,12 @@ loc_82FEBCA0:
 	ctx.r11.u64 = ctx.r24.u32 & 0x1;
 	ctx.cr0.compare<int32_t>(ctx.r11.s32, 0, ctx.xer);
 	// bne 0x82febd08
-	// ERROR: conditional branch to unknown address 0x82FEBD08
-	if (!ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x82FEBCB4 to 0x82FEBD08");
+	if (!ctx.cr0.eq) goto loc_82FEBD08;
 	// rlwinm. r11,r24,0,30,30
 	ctx.r11.u64 = __builtin_rotateleft64(ctx.r24.u32 | (ctx.r24.u64 << 32), 0) & 0x2;
 	ctx.cr0.compare<int32_t>(ctx.r11.s32, 0, ctx.xer);
 	// beq 0x82febccc
-	// ERROR: conditional branch to unknown address 0x82FEBCCC
-	if (ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x82FEBCBC to 0x82FEBCCC");
+	if (ctx.cr0.eq) goto loc_82FEBCCC;
 	// lis r10,-32768
 	ctx.r10.s64 = -2147483648;
 	// cmplw cr6,r26,r10
@@ -28512,13 +28508,11 @@ loc_82FEBCCC:
 	// cmpwi cr6,r11,0
 	ctx.cr6.compare<int32_t>(ctx.r11.s32, 0, ctx.xer);
 	// bne cr6,0x82febd08
-	// ERROR: conditional branch to unknown address 0x82FEBD08
-	if (!ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x82FEBCD0 to 0x82FEBD08");
+	if (!ctx.cr6.eq) goto loc_82FEBD08;
 	// cmplw cr6,r26,r31
 	ctx.cr6.compare<uint32_t>(ctx.r26.u32, ctx.r31.u32, ctx.xer);
 	// ble cr6,0x82febd08
-	// ERROR: conditional branch to unknown address 0x82FEBD08
-	if (!ctx.cr6.gt) REX_FATAL("Unresolved branch from 0x82FEBCD8 to 0x82FEBD08");
+	if (!ctx.cr6.gt) goto loc_82FEBD08;
 loc_82FEBCDC:
 	// bl 0x82fe92c0
 	ctx.lr = 0x82FEBCE0;
@@ -33431,7 +33425,7 @@ loc_831F7B8C:
 	// addi r23,r23,2
 	ctx.r23.s64 = ctx.r23.s64 + 2;
 	// bne 0x831f794c
-	if (!ctx.cr0.eq) REX_FATAL("Unresolved branch from 0x831F7BA4 to 0x831F794C");
+	if (!ctx.cr0.eq) goto loc_831F794C;
 	// lwz r25,124(r31)
 	ctx.r25.u64 = REX_LOAD_U32(ctx.r31.u32 + 124);
 	// lwz r21,100(r31)

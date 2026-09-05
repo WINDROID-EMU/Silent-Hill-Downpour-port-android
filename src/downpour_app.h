@@ -126,6 +126,14 @@ class DownpourApp : public rex::ReXApp {
       paths.user_data_root = storage_dir / "user";
       paths.cache_root = storage_dir / "cache";
       paths.game_data_root = storage_dir / "game";
+      paths.config_path = storage_dir / "downpour.toml";
+      auto logs_dir = storage_dir / "logs";
+      std::error_code ec;
+      std::filesystem::create_directories(paths.user_data_root, ec);
+      std::filesystem::create_directories(paths.cache_root, ec);
+      std::filesystem::create_directories(paths.game_data_root, ec);
+      std::filesystem::create_directories(logs_dir, ec);
+      rex::cvar::SetFlagByName("log_file", (logs_dir / "downpour.log").string());
       return;
     }
 #endif

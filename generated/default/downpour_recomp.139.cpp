@@ -22766,8 +22766,7 @@ loc_82D5E328:
 	// cmplwi cr6,r10,0
 	ctx.cr6.compare<uint32_t>(ctx.r10.u32, 0, ctx.xer);
 	// beq cr6,0x82d5e288
-	// ERROR: conditional branch to unknown address 0x82D5E288
-	if (ctx.cr6.eq) REX_FATAL("Unresolved branch from 0x82D5E344 to 0x82D5E288");
+	if (ctx.cr6.eq) goto loc_82D5E288;
 	// mr r5,r28
 	ctx.r5.u64 = ctx.r28.u64;
 	// rotlwi r3,r10,0

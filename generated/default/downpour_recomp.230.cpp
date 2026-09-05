@@ -29393,8 +29393,7 @@ loc_83051258:
 	// cmplw cr6,r31,r11
 	ctx.cr6.compare<uint32_t>(ctx.r31.u32, ctx.r11.u32, ctx.xer);
 	// blt cr6,0x83051258
-	// ERROR: conditional branch to unknown address 0x83051258
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x83051284 to 0x83051258");
+	if (ctx.cr6.lt) goto loc_83051258;
 	// b 0x830512f8
 	goto loc_830512F8;
 loc_8305128C:

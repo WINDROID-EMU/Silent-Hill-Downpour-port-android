@@ -27147,15 +27147,13 @@ loc_82FE8860:
 	// fcmpu cr6,f13,f12
 	ctx.cr6.compare(ctx.f13.f64, ctx.f12.f64);
 	// bgt cr6,0x82fe8664
-	// ERROR: conditional branch to unknown address 0x82FE8664
-	if (ctx.cr6.gt) REX_FATAL("Unresolved branch from 0x82FE88D8 to 0x82FE8664");
+	if (ctx.cr6.gt) goto loc_82FE8664;
 	// lfd f12,328(r31)
 	ctx.f12.u64 = REX_LOAD_U64(ctx.r31.u32 + 328);
 	// fcmpu cr6,f13,f12
 	ctx.cr6.compare(ctx.f13.f64, ctx.f12.f64);
 	// blt cr6,0x82fe867c
-	// ERROR: conditional branch to unknown address 0x82FE867C
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x82FE88E4 to 0x82FE867C");
+	if (ctx.cr6.lt) goto loc_82FE867C;
 	// fctiwz f13,f13
 	ctx.f13.s64 = std::isnan(ctx.f13.f64) ? int64_t(0x80000000U) : (ctx.f13.f64 >= double(INT_MAX)) ? INT_MAX : simde_mm_cvttsd_si32(simde_mm_load_sd(&ctx.f13.f64));
 	// stfd f13,88(r1)
@@ -27236,13 +27234,11 @@ loc_82FE8974:
 	// cmpwi cr6,r4,1024
 	ctx.cr6.compare<int32_t>(ctx.r4.s32, 1024, ctx.xer);
 	// bgt cr6,0x82fe8664
-	// ERROR: conditional branch to unknown address 0x82FE8664
-	if (ctx.cr6.gt) REX_FATAL("Unresolved branch from 0x82FE8978 to 0x82FE8664");
+	if (ctx.cr6.gt) goto loc_82FE8664;
 	// cmpwi cr6,r4,-1021
 	ctx.cr6.compare<int32_t>(ctx.r4.s32, -1021, ctx.xer);
 	// blt cr6,0x82fe867c
-	// ERROR: conditional branch to unknown address 0x82FE867C
-	if (ctx.cr6.lt) REX_FATAL("Unresolved branch from 0x82FE8980 to 0x82FE867C");
+	if (ctx.cr6.lt) goto loc_82FE867C;
 	// fmr f1,f31
 	ctx.fpscr.disableFlushMode();
 	ctx.f1.f64 = ctx.f31.f64;
